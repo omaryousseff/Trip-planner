@@ -1,0 +1,6 @@
+{
+  "name": "Trip Planner",
+  "description": "Personalized trip planning app that creates detailed schedules with transportation, food places, attractions, and activities based on occasion, group size, and travel preferences.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

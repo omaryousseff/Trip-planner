@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #FFF8F0;
+    color: #2D2D2D;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Vibrant Palette Custom Theme Accents */
+.vibrant-card {
+  background-color: #FFFFFF;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 4px solid #E5E7EB;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.vibrant-card-coral {
+  background-color: #FF6B6B;
+  border-radius: 1.5rem;
+  border-bottom: 4px solid #EE5253;
+  color: #FFFFFF;
+}
+
+.vibrant-card-teal {
+  background-color: #4ECDC4;
+  border-radius: 1.5rem;
+  border-bottom: 4px solid #45B7AF;
+  color: #FFFFFF;
+}
+
+.vibrant-card-purple {
+  background-color: #A29BFE;
+  border-radius: 1.5rem;
+  border-bottom: 4px solid #6C5CE7;
+  color: #FFFFFF;
+}
+
+.vibrant-card-dark {
+  background-color: #1A1A1A;
+  border-radius: 1.5rem;
+  border-bottom: 4px solid #000000;
+  color: #FFFFFF;
+}
