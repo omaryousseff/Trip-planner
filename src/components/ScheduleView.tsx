@@ -1,4 +1,22 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { 
   DayPlan, 
   ScheduleItem, 
@@ -12,27 +30,481 @@ import {
   Compass, 
   Clock, 
   DollarSign, 
-  Lightbulb, 
   CheckCircle2, 
-  Circle, 
   ExternalLink, 
   RotateCw, 
-  Info,
-  Train,
-  Footprints,
-  Bus,
-  Car,
-  Ship,
-  Sparkles,
+  Train, 
+  GripVertical,
   Maximize2,
-  Image as ImageIcon,
+  Camera,
+  Sparkles,
   Building2,
-  Star
+  Calendar,
+  Share2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { getLandmarkPhoto, LandmarkPhotoInfo } from '../utils/landmarkImages';
-import { getDirectionsUrl, getPlaceSearchUrl, resolvePlaceCoordinates } from '../utils/geoCoordinates';
+import { getDirectionsUrl, getPlaceSearchUrl } from '../utils/geoCoordinates';
 import { PhotoLightboxModal } from './PhotoLightboxModal';
+import { WashiTape, PushPin, PassportStamp, triggerStampCelebration } from './ScrapbookElements';
+import { triggerHaptic } from '../utils/haptics';
 
+// Time adjustment helper for dragged items
+const TIME_SLOTS_PRESETS = ['09:00 AM', '11:30 AM', '02:00 PM', '04:30 PM', '07:00 PM', '09:00 PM', '10:30 PM'];
+
+export const adjustScheduleTimes = (items: ScheduleItem[]): ScheduleItem[] => {
+  return items.map((item, idx) => {
+    const newTime = TIME_SLOTS_PRESETS[Math.min(idx, TIME_SLOTS_PRESETS.length - 1)] || item.time;
+    let newSlot: TimeSlot = 'morning';
+    if (idx <= 1) newSlot = 'morning';
+    else if (idx <= 3) newSlot = 'afternoon';
+    else newSlot = 'evening';
+
+    return {
+      ...item,
+      time: newTime,
+      timeSlot: newSlot,
+    };
+  });
+};
+
+// SORTABLE SCRAPBOOK ITEM WRAPPER
+interface SortableItemProps {
+  item: ScheduleItem;
+  dayIndex: number;
+  idx: number;
+  destination: string;
+  onToggleComplete: (dayIndex: number, itemId: string) => void;
+  onRegenerateItem: (dayIndex: number, item: ScheduleItem) => void;
+  onOpenPhotoLightbox: (item: ScheduleItem, photoInfo: LandmarkPhotoInfo) => void;
+  regeneratingItemId: string | null;
+}
+
+const SortableScrapbookItem: React.FC<SortableItemProps> = ({
+  item,
+  dayIndex,
+  idx,
+  destination,
+  onToggleComplete,
+  onRegenerateItem,
+  onOpenPhotoLightbox,
+  regeneratingItemId,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  const photoInfo = getLandmarkPhoto(item, destination);
+
+  // Curate the best 3 photos of the place (from Pinterest search: place name city)
+  const placePhotos: string[] = React.useMemo(() => {
+    const list: string[] = [];
+    if (item.photos && item.photos.length > 0) {
+      list.push(...item.photos);
+    } else {
+      if (item.imageUrl) list.push(item.imageUrl);
+      if (photoInfo.photos && photoInfo.photos.length > 0) {
+        photoInfo.photos.forEach((p) => {
+          if (p && !list.includes(p)) list.push(p);
+        });
+      }
+      if (photoInfo.alternativePhotos && photoInfo.alternativePhotos.length > 0) {
+        photoInfo.alternativePhotos.forEach((p) => {
+          if (p.url && !list.includes(p.url)) list.push(p.url);
+        });
+      }
+      if (photoInfo.url && !list.includes(photoInfo.url)) list.push(photoInfo.url);
+    }
+    return list.slice(0, 3);
+  }, [item, photoInfo]);
+
+  const [activePhotoIdx, setActivePhotoIdx] = useState(0);
+  const currentPhotoUrl = placePhotos[activePhotoIdx] || photoInfo.url;
+
+  const isFood = item.category === 'food';
+  const isCompleted = !!item.completed;
+  const isRegenerating = regeneratingItemId === item.id;
+
+  // Subtle natural paper rotations
+  const itemRotations = [-1.2, 0.8, -0.7, 1.4, -1.0, 0.9];
+  const naturalRotation = itemRotations[idx % itemRotations.length];
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative mb-8 last:mb-2">
+      {/* Timeline Node Connector Point */}
+      <div className="absolute -left-[27px] sm:-left-[35px] top-6 z-20 flex items-center justify-center">
+        <button
+          type="button"
+          onClick={() => {
+            if (!isCompleted) triggerStampCelebration();
+            else triggerHaptic('light');
+            onToggleComplete(dayIndex, item.id);
+          }}
+          title={isCompleted ? 'Mark unvisited' : 'Stamp as visited!'}
+          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-3 flex items-center justify-center transition-all cursor-pointer shadow-md ${
+            isCompleted
+              ? 'bg-[#285A34] border-[#285A34] text-white'
+              : 'bg-[#FFFDF9] border-[#2D241E] text-[#2D241E] hover:border-[#FF7A59]'
+          }`}
+        >
+          {isCompleted ? (
+            <CheckCircle2 className="w-4 h-4 text-white" />
+          ) : (
+            <span className="text-[11px] font-black font-mono">{idx + 1}</span>
+          )}
+        </button>
+      </div>
+
+      {/* ITEM PHYSICAL OBJECT (Sticky Note vs Polaroid vs Postcard) */}
+      <motion.div
+        whileHover={{ scale: 1.015, y: -3 }}
+        whileTap={{ scale: 0.99 }}
+        style={{ transform: `rotate(${isDragging ? 0 : naturalRotation}deg)` }}
+        className={`relative transition-shadow duration-200 ${
+          isDragging ? 'shadow-2xl opacity-90' : ''
+        }`}
+      >
+        {/* ========================================================
+            CASE 1: FOOD -> YELLOW STICKY NOTE
+        ======================================================== */}
+        {isFood ? (
+          <div className="sticky-note-yellow p-5 sm:p-6 border border-[#F0DC82] rounded-2xl relative shadow-md">
+            {/* Brass push pin in top center */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+              <PushPin color="brass" />
+            </div>
+
+            {/* Drag Handle */}
+            <div
+              {...attributes}
+              {...listeners}
+              className="absolute top-3 right-3 text-stone-400 hover:text-stone-700 cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-black/5"
+              title="Drag to rearrange & recalculate times"
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+
+            {/* Header / Time */}
+            <div className="flex items-center gap-2 mb-2 pr-8">
+              <span className="font-mono text-xs font-black text-amber-900 bg-amber-200/70 px-2.5 py-0.5 rounded-md">
+                {item.time}
+              </span>
+              <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1">
+                <Utensils className="w-3.5 h-3.5" />
+                {item.foodDetail?.mealType || 'Culinary Stop'}
+              </span>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl sm:text-2xl font-black text-[#2D241E] font-cozy-serif mb-1">
+              {item.title}
+            </h3>
+
+            <p className="text-xs sm:text-sm text-stone-800 leading-relaxed font-medium mb-3">
+              {item.description}
+            </p>
+
+            {/* Food recommendations & details */}
+            {item.foodDetail && (
+              <div className="bg-white/80 border border-amber-300/80 rounded-xl p-3 text-xs space-y-1 mb-3">
+                <div className="flex justify-between font-bold text-stone-700">
+                  <span>Cuisine: {item.foodDetail.cuisine}</span>
+                  <span className="font-mono">{item.foodDetail.priceRange}</span>
+                </div>
+                {item.foodDetail.recommendedDishes && item.foodDetail.recommendedDishes.length > 0 && (
+                  <p className="text-amber-900">
+                    <span className="font-black">Must Order: </span>
+                    {item.foodDetail.recommendedDishes.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Bottom Actions */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-300/60 text-xs">
+              <div className="flex items-center gap-1 text-stone-600 font-semibold truncate max-w-[200px]">
+                <MapPin className="w-3.5 h-3.5 text-[#FF7A59]" />
+                <span className="truncate">{item.location}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={getDirectionsUrl({
+                    destinationTitle: item.title,
+                    destinationLocation: item.location,
+                    destinationCity: destination,
+                    travelMode: 'walking',
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#2D241E] hover:bg-black text-white px-3 py-1.5 rounded-lg font-black text-[11px] inline-flex items-center gap-1 shadow-2xs"
+                >
+                  <Navigation className="w-3 h-3" />
+                  <span>Directions</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Completed Stamp */}
+            {isCompleted && (
+              <div className="absolute bottom-4 right-6 pointer-events-none">
+                <PassportStamp
+                  city="TASTED"
+                  label="VISITED"
+                  color="wine"
+                  rotation={-8}
+                  size="sm"
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ========================================================
+              CASE 2: PLACES & ACTIVITIES -> AUTHENTIC POLAROID
+          ======================================================== */
+          <div className="polaroid-card relative border border-stone-200 transition-all duration-300 ease-out hover:scale-[1.02]">
+            {/* Washi tape at top corner */}
+            <div className="absolute -top-3.5 left-6 z-10">
+              <WashiTape color={idx % 2 === 0 ? 'coral' : 'mint'} rotation={idx % 2 === 0 ? -3 : 4} />
+            </div>
+
+            {/* Drag Handle */}
+            <div
+              {...attributes}
+              {...listeners}
+              className="absolute top-2 right-2 text-stone-400 hover:text-stone-800 cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-stone-100 z-20"
+              title="Drag note to reorder schedule"
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+
+            {/* Photo inside Polaroid - Best 3 Photos Display */}
+            <div className="relative rounded-sm overflow-hidden bg-stone-900 group">
+              <img
+                src={currentPhotoUrl}
+                alt={`${item.title} - photo ${activePhotoIdx + 1}`}
+                referrerPolicy="no-referrer"
+                className="w-full h-52 sm:h-64 object-cover group-hover:scale-103 transition-transform duration-300"
+              />
+
+              {/* Time pill overlay on photo */}
+              <div className="absolute top-3 left-3 bg-[#2D241E]/85 backdrop-blur-xs text-white text-xs font-mono font-black px-2.5 py-1 rounded-md shadow-xs flex items-center gap-1.5 z-10">
+                <Clock className="w-3 h-3 text-[#FFD93D]" />
+                <span>{item.time}</span>
+              </div>
+
+              {/* Best 3 Pinterest Photos Pill Badge */}
+              <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1.5 shadow-xs z-10">
+                <Camera className="w-3 h-3 text-[#E60023]" />
+                <span>3 Photos</span>
+                {placePhotos.length > 1 && (
+                  <span className="bg-[#E60023] text-white px-1 py-0.2 rounded font-mono text-[9px]">
+                    {activePhotoIdx + 1}/{placePhotos.length}
+                  </span>
+                )}
+              </div>
+
+              {/* Navigation arrows for multiple photos */}
+              {placePhotos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerHaptic('light');
+                      setActivePhotoIdx((prev) => (prev > 0 ? prev - 1 : placePhotos.length - 1));
+                    }}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white p-1.5 rounded-full backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer shadow-md"
+                    title="Previous photo"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerHaptic('light');
+                      setActivePhotoIdx((prev) => (prev < placePhotos.length - 1 ? prev + 1 : 0));
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white p-1.5 rounded-full backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer shadow-md"
+                    title="Next photo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+
+              {/* Bottom bar inside photo: Stated Source & Inspect */}
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none z-10">
+                {/* Verified Source Tag directly stating origin */}
+                <div className="bg-black/75 backdrop-blur-xs text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 pointer-events-auto">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E60023]" />
+                  <span>{photoInfo.source || 'Pinterest'}</span>
+                </div>
+
+                {/* Inspect / Zoom button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    onOpenPhotoLightbox(item, {
+                      ...photoInfo,
+                      url: currentPhotoUrl,
+                    });
+                  }}
+                  className="bg-white/90 hover:bg-white text-stone-900 text-xs font-black p-2 rounded-full shadow-md transition-all cursor-pointer pointer-events-auto shrink-0"
+                  title="Inspect high-res photo"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 3-Photo Mini Gallery Strip */}
+            {placePhotos.length > 1 && (
+              <div className="pt-2 px-1 grid grid-cols-3 gap-1.5">
+                {placePhotos.map((thumbUrl, pIdx) => (
+                  <button
+                    key={pIdx}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      setActivePhotoIdx(pIdx);
+                    }}
+                    className={`relative rounded-md overflow-hidden h-14 border cursor-pointer transition-all ${
+                      activePhotoIdx === pIdx
+                        ? 'ring-2 ring-[#FF7A59] border-transparent scale-102 shadow-xs'
+                        : 'opacity-70 hover:opacity-100 border-stone-200'
+                    }`}
+                    title={`View photo ${pIdx + 1} from Pinterest`}
+                  >
+                    <img
+                      src={thumbUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                    <span className="absolute bottom-1 right-1.5 bg-black/75 text-white text-[9px] font-mono font-bold px-1 rounded">
+                      #{pIdx + 1}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Handwritten Title and Caption */}
+            <div className="pt-3 pb-1 px-1">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-handwritten text-2xl sm:text-3xl font-bold text-stone-900 leading-tight">
+                    {item.title}
+                  </h3>
+                  <p className="text-xs text-stone-500 font-medium flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-[#FF7A59]" />
+                    <span>{item.location}, {destination}</span>
+                  </p>
+                </div>
+
+                {item.costEstimate && (
+                  <span className="text-[11px] font-mono font-bold bg-[#FAF4EA] text-stone-700 px-2 py-1 rounded-md border border-[#EFE5D8]">
+                    {item.costEstimate}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs sm:text-sm text-stone-700 leading-relaxed font-medium mt-2">
+                {item.description}
+              </p>
+
+              {item.tips && (
+                <div className="mt-2 text-xs bg-[#FFF8E7] text-stone-800 p-2.5 rounded-xl border border-[#F3E2B8]">
+                  <span className="font-black text-[#FF7A59]">Note: </span>
+                  {item.tips}
+                </div>
+              )}
+
+              {/* Bottom Quick Controls */}
+              <div className="mt-3 pt-2.5 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <a
+                    href={getDirectionsUrl({
+                      destinationTitle: item.title,
+                      destinationLocation: item.location,
+                      destinationCity: destination,
+                      travelMode: 'walking',
+                    })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#FF7A59] hover:text-[#E05030] font-black inline-flex items-center gap-1"
+                  >
+                    <Navigation className="w-3.5 h-3.5" />
+                    <span>Walk directions</span>
+                  </a>
+
+                  {photoInfo.officialWebsiteUrl && (
+                    <a
+                      href={photoInfo.officialWebsiteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-stone-500 hover:text-stone-800 font-bold inline-flex items-center gap-1 text-[11px]"
+                    >
+                      <span>Official Site</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={isRegenerating}
+                    onClick={() => {
+                      triggerHaptic('medium');
+                      onRegenerateItem(dayIndex, item);
+                    }}
+                    className="text-[11px] font-bold text-stone-500 hover:text-stone-800 p-1 rounded-md hover:bg-stone-100 inline-flex items-center gap-1 cursor-pointer"
+                    title="Swap with another suggestion"
+                  >
+                    <RotateCw className={`w-3 h-3 ${isRegenerating ? 'animate-spin' : ''}`} />
+                    <span>Alternate</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Completed Inked Stamp */}
+            {isCompleted && (
+              <div className="absolute top-1/2 right-6 -translate-y-1/2 pointer-events-none z-30">
+                <PassportStamp
+                  city={destination.slice(0, 10)}
+                  label="VISITED"
+                  color="wine"
+                  rotation={-10}
+                  size="md"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+};
+
+// MAIN SCHEDULE VIEW COMPONENT
 interface ScheduleViewProps {
   days: DayPlan[];
   destination: string;
@@ -40,6 +512,7 @@ interface ScheduleViewProps {
   onSelectDay: (index: number) => void;
   onToggleComplete: (dayIndex: number, itemId: string) => void;
   onRegenerateItem: (dayIndex: number, item: ScheduleItem) => void;
+  onReorderItems?: (dayIndex: number, newItems: ScheduleItem[]) => void;
   regeneratingItemId: string | null;
   onUpdateItemPhoto?: (
     dayIndex: number, 
@@ -62,546 +535,164 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   onSelectDay,
   onToggleComplete,
   onRegenerateItem,
+  onReorderItems,
   regeneratingItemId,
   onUpdateItemPhoto,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<'all' | CategoryType>('all');
   const [selectedPhotoModal, setSelectedPhotoModal] = useState<{
     item: ScheduleItem;
     photoInfo: LandmarkPhotoInfo;
   } | null>(null);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   const currentDay = days[activeDayIndex] || days[0];
+  const items = currentDay.schedule;
 
-  if (!currentDay) {
-    return (
-      <div className="p-8 text-center text-stone-500 bg-white rounded-2xl border border-stone-200">
-        No schedule available.
-      </div>
-    );
-  }
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-  const filteredSchedule = currentDay.schedule.filter((item) => {
-    if (selectedCategory === 'all') return true;
-    return item.category === selectedCategory;
-  });
+    triggerHaptic('strong');
 
-  const completedCount = currentDay.schedule.filter((item) => item.completed).length;
-  const totalCount = currentDay.schedule.length;
-  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
 
-  const getCategoryConfig = (category: CategoryType) => {
-    switch (category) {
-      case 'transport':
-        return {
-          label: 'Transportation',
-          icon: Train,
-          badgeBg: 'bg-[#F3F0FF] text-[#6C5CE7] border-[#A29BFE]/50',
-          accentColor: 'border-l-[#6C5CE7]',
-          iconColor: 'text-[#6C5CE7]',
-        };
-      case 'food':
-        return {
-          label: 'Food & Dining',
-          icon: Utensils,
-          badgeBg: 'bg-[#FFE8D6] text-[#D35400] border-[#FF6B6B]/40',
-          accentColor: 'border-l-[#FF6B6B]',
-          iconColor: 'text-[#FF6B6B]',
-        };
-      case 'place':
-        return {
-          label: 'Sight & Place',
-          icon: MapPin,
-          badgeBg: 'bg-[#E0F9F7] text-[#009688] border-[#4ECDC4]/50',
-          accentColor: 'border-l-[#4ECDC4]',
-          iconColor: 'text-[#4ECDC4]',
-        };
-      case 'activity':
-      default:
-        return {
-          label: 'Activity',
-          icon: Compass,
-          badgeBg: 'bg-[#F3F0FF] text-[#8E44AD] border-[#A29BFE]/50',
-          accentColor: 'border-l-[#A29BFE]',
-          iconColor: 'text-[#A29BFE]',
-        };
-    }
-  };
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reordered = arrayMove<ScheduleItem>(items, oldIndex, newIndex);
+      // Automatically adjust times chronologically
+      const timed = adjustScheduleTimes(reordered);
 
-  const getTransportIcon = (mode?: string) => {
-    switch (mode?.toLowerCase()) {
-      case 'walk':
-      case 'walking':
-        return Footprints;
-      case 'bus':
-        return Bus;
-      case 'taxi':
-      case 'car':
-        return Car;
-      case 'ferry':
-      case 'boat':
-        return Ship;
-      case 'subway':
-      case 'train':
-      case 'metro':
-      default:
-        return Train;
+      if (onReorderItems) {
+        onReorderItems(activeDayIndex, timed);
+      }
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Day Selector Tabs */}
-      <div className="bg-white rounded-2xl p-2 border border-stone-200/90 border-b-4 border-b-stone-200 shadow-sm flex items-center gap-2 overflow-x-auto scrollbar-none">
-        {days.map((day, idx) => {
-          const isSelected = activeDayIndex === idx;
-          const dayCompleted = day.schedule.filter((s) => s.completed).length;
-          const dayTotal = day.schedule.length;
-
-          return (
-            <button
-              key={day.dayNumber}
-              type="button"
-              id={`tab-day-${day.dayNumber}`}
-              onClick={() => onSelectDay(idx)}
-              className={`flex-1 min-w-[120px] py-3 px-4 rounded-xl text-left transition-all border ${
-                isSelected
-                  ? 'bg-[#FF6B6B] text-white border-[#EE5253] border-b-2 shadow-xs'
-                  : 'bg-[#FFF8F0] border-transparent text-stone-700 hover:bg-[#FFE8D6]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className={`text-[11px] font-black uppercase tracking-wider ${isSelected ? 'text-white/90' : 'text-stone-500'}`}>
-                  Day {day.dayNumber}
-                </span>
-                {dayTotal > 0 && (
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                    isSelected ? 'bg-white/25 text-white' : 'bg-stone-200/80 text-stone-700'
-                  }`}>
-                    {dayCompleted}/{dayTotal}
-                  </span>
-                )}
-              </div>
-              <div className={`text-xs font-black truncate mt-1 ${isSelected ? 'text-white' : 'text-stone-900'}`}>
-                {day.title ? day.title.replace(/^Day\s*\d+[:\-]?\s*/i, '') : `Day ${day.dayNumber}`}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Current Day Header Card */}
-      <div className="bg-[#FF6B6B] border-b-4 border-[#EE5253] text-white rounded-[28px] p-6 md:p-8 shadow-md">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white/90 bg-white/20 px-3 py-1 rounded-full border border-white/30 mb-2">
-              <span>Day {currentDay.dayNumber} of {days.length}</span>
-              <span>•</span>
-              <span>{destination}</span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight italic">
-              {currentDay.title}
-            </h2>
-            <p className="text-white/90 text-sm mt-2 max-w-3xl leading-relaxed font-medium">
-              {currentDay.summary}
-            </p>
-          </div>
-
-          {/* Day Progress bar */}
-          <div className="bg-black/15 backdrop-blur-md rounded-2xl p-4 border border-white/20 min-w-[210px]">
-            <div className="flex items-center justify-between text-xs mb-2 font-bold">
-              <span className="text-white/90">Day Progress</span>
-              <span className="text-white font-black">{completedCount} of {totalCount} visited</span>
-            </div>
-            <div className="w-full h-2.5 bg-black/25 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#FFD93D] rounded-full transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Category Filter Chips */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-black uppercase text-stone-400 mr-1 tracking-wider hidden sm:inline">Filter:</span>
-          {[
-            { id: 'all', label: 'All Items', icon: null },
-            { id: 'place', label: 'Places & Sights', icon: MapPin },
-            { id: 'food', label: 'Food & Dining', icon: Utensils },
-            { id: 'activity', label: 'Activities', icon: Compass },
-            { id: 'transport', label: 'Transportation', icon: Train },
-          ].map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            const Icon = cat.icon;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                id={`filter-${cat.id}`}
-                onClick={() => setSelectedCategory(cat.id as any)}
-                className={`inline-flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl border font-black transition-all ${
-                  isSelected
-                    ? 'bg-[#1A1A1A] text-white border-b-2 border-black shadow-xs'
-                    : 'bg-white text-stone-700 border-stone-200 hover:bg-[#FFF8F0]'
-                }`}
-              >
-                {Icon && <Icon className="w-3.5 h-3.5" />}
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <span className="text-xs text-stone-500 font-bold">
-          Showing {filteredSchedule.length} stops
-        </span>
-      </div>
-
-      {/* Timeline Schedule Items List */}
-      <div className="space-y-5">
-        {filteredSchedule.map((item, index) => {
-          const catConfig = getCategoryConfig(item.category);
-          const CategoryIcon = catConfig.icon;
-          const isRegenerating = regeneratingItemId === item.id;
-          const photoInfo = getLandmarkPhoto(item, destination);
-          const resolvedCoords = resolvePlaceCoordinates(item, destination, index);
-          
-          const effectivePhotoUrl = item.imageUrl || photoInfo.url;
-          const effectiveCaption = item.photoCaption || photoInfo.caption;
-          const effectiveSource = item.photoSource || photoInfo.source;
-          const effectiveSourceType = item.photoSourceType || photoInfo.sourceType;
-          const officialWebsiteUrl = item.officialWebsiteUrl || photoInfo.officialWebsiteUrl;
-          const tripAdvisorUrl = item.tripAdvisorUrl || photoInfo.tripAdvisorUrl;
-          const alternativePhotos = item.alternativePhotos || photoInfo.alternativePhotos;
-          const isVerifiedPhoto = !!item.photoSource || photoInfo.isVerifiedLandmark;
-          
-          // Turn-by-turn navigation between stops
-          const previousItem = index > 0 ? filteredSchedule[index - 1] : null;
-
-          const directionsUrl = getDirectionsUrl({
-            destinationTitle: item.title,
-            destinationLocation: item.location,
-            destinationCity: destination,
-            originTitle: previousItem ? previousItem.title : undefined,
-            originLocation: previousItem ? previousItem.location : undefined,
-            travelMode: item.category === 'transport' ? 'transit' : 'walking',
-          });
-
-          const placeSearchUrl = item.googleMapsUrl || getPlaceSearchUrl(item.title, item.location, destination);
-
-          return (
-            <div
-              key={item.id || index}
-              id={`schedule-item-${item.id}`}
-              className={`bg-white rounded-[28px] border border-stone-200/90 shadow-sm transition-all duration-200 overflow-hidden ${
-                item.completed
-                  ? 'bg-stone-50/80 opacity-75'
-                  : 'hover:shadow-md'
-              }`}
-            >
-              {/* Landmark / Place Photo Header Banner */}
-              <div 
-                className="relative w-full h-44 sm:h-52 bg-stone-900 overflow-hidden cursor-pointer group"
-                onClick={() => setSelectedPhotoModal({ 
-                  item, 
-                  photoInfo: { 
-                    url: effectivePhotoUrl, 
-                    caption: effectiveCaption, 
-                    alt: item.title, 
-                    isVerifiedLandmark: isVerifiedPhoto,
-                    source: effectiveSource,
-                    sourceType: effectiveSourceType,
-                    officialWebsiteUrl,
-                    tripAdvisorUrl,
-                    alternativePhotos,
-                  } 
-                })}
-                title="Click to view original photo with stated source"
-              >
-                <img
-                  src={effectivePhotoUrl}
-                  alt={item.title}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-
-                {/* Stop number badge & Category */}
-                <div className="absolute top-3 left-3 flex items-center gap-2">
-                  <span className="bg-[#FFE17D] text-[#3D291F] font-black text-xs px-3 py-1 rounded-full border border-[#DFB277] shadow-xs">
-                    Stop #{index + 1}
-                  </span>
-                  <span className={`inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${catConfig.badgeBg} shadow-xs`}>
-                    <CategoryIcon className="w-3.5 h-3.5" />
-                    {catConfig.label}
-                  </span>
-                </div>
-
-                {/* Stated Source Badge (Embedded Original Photo Inside App) */}
-                <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                  <div 
-                    className="bg-black/75 text-white text-[11px] font-black px-3 py-1 rounded-full backdrop-blur-md flex items-center gap-1.5 border border-white/20 shadow-md"
-                    title={`Original photo source: ${effectiveSource}`}
-                  >
-                    {effectiveSourceType === 'tripadvisor' || effectiveSource.toLowerCase().includes('tripadvisor') ? (
-                      <Star className="w-3 h-3 text-[#00AA6C] fill-[#00AA6C]" />
-                    ) : (
-                      <Building2 className="w-3 h-3 text-[#FFE17D]" />
-                    )}
-                    <span className="max-w-[120px] sm:max-w-[180px] truncate">
-                      {effectiveSource}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPhotoModal({ 
-                        item, 
-                        photoInfo: { 
-                          url: effectivePhotoUrl, 
-                          caption: effectiveCaption, 
-                          alt: item.title, 
-                          isVerifiedLandmark: isVerifiedPhoto,
-                          source: effectiveSource,
-                          sourceType: effectiveSourceType,
-                          officialWebsiteUrl,
-                          tripAdvisorUrl,
-                          alternativePhotos,
-                        } 
-                      });
-                    }}
-                    className="bg-black/60 hover:bg-black text-white text-[11px] font-bold px-2.5 py-1 rounded-full backdrop-blur-md flex items-center gap-1 transition-colors border border-white/20"
-                    title="View original photo details"
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">View</span>
-                  </button>
-                </div>
-
-                {/* Photo Caption & Stated Source at bottom of photo banner */}
-                <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-xs text-white/95">
-                  <div className="flex items-center gap-1.5 font-bold truncate">
-                    <ImageIcon className="w-3.5 h-3.5 text-[#FFE17D] shrink-0" />
-                    <span className="truncate">{effectiveCaption}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    {alternativePhotos && alternativePhotos.length > 1 && (
-                      <span className="bg-[#FFE17D] text-[#2D241E] font-black text-[10px] px-2 py-0.5 rounded-full shadow-2xs">
-                        {alternativePhotos.length} Photos
-                      </span>
-                    )}
-                    <span className="bg-[#4ECDC4] text-stone-900 font-black text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Original Photo
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 md:p-6">
-                {/* Time, Duration & Completion Action */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center flex-wrap gap-2">
-                    {/* Time badge */}
-                    <div className="inline-flex items-center gap-1.5 text-xs font-black text-[#2D2D2D] bg-[#FFF8F0] px-3 py-1 rounded-xl border border-stone-300">
-                      <Clock className="w-3.5 h-3.5 text-[#FF6B6B]" />
-                      {item.time}
-                    </div>
-
-                    {/* Duration badge */}
-                    {item.duration && (
-                      <span className="text-xs text-stone-500 font-bold">
-                        • {item.duration}
-                      </span>
-                    )}
-
-                    {/* GPS Coordinates pin */}
-                    <span className="text-[11px] text-stone-400 font-mono hidden sm:inline">
-                      ({resolvedCoords.lat.toFixed(4)}, {resolvedCoords.lng.toFixed(4)})
-                    </span>
-                  </div>
-
-                  {/* Checkbox toggle */}
-                  <button
-                    type="button"
-                    id={`btn-complete-${item.id}`}
-                    onClick={() => onToggleComplete(activeDayIndex, item.id)}
-                    title={item.completed ? 'Mark as incomplete' : 'Mark as completed'}
-                    className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl transition-all ${
-                      item.completed
-                        ? 'bg-[#E0F9F7] text-[#009688] border border-[#4ECDC4]/50'
-                        : 'bg-[#FFF8F0] text-stone-700 hover:bg-[#FFE8D6] border border-stone-200'
-                    }`}
-                  >
-                    {item.completed ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-[#009688]" />
-                        <span>Done</span>
-                      </>
-                    ) : (
-                      <>
-                        <Circle className="w-4 h-4 text-stone-400" />
-                        <span>Mark done</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Title & Location */}
-                <div className="mb-2">
-                  <h3 className={`text-lg md:text-xl font-black ${item.completed ? 'text-stone-400 line-through' : 'text-[#1A1A1A]'}`}>
-                    {item.title}
-                  </h3>
-
-                  {item.location && (
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-stone-600 mt-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#FF6B6B] shrink-0" />
-                      <span className="truncate">{item.location}, {destination}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Description */}
-                <p className="text-sm text-stone-600 font-medium leading-relaxed mb-3">
-                  {item.description}
-                </p>
-
-                {/* Special Detail: Food Item Details */}
-                {item.category === 'food' && item.foodDetail && (
-                  <div className="bg-[#FFF8F0] border-2 border-[#FFD93D]/60 border-b-4 border-b-[#E5B80B]/50 rounded-2xl p-4 mb-3 text-xs text-[#2D2D2D] space-y-2">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-black text-[#D35400] uppercase tracking-wide">
-                        🍽️ {item.foodDetail.mealType} • {item.foodDetail.cuisine}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {item.foodDetail.priceRange && (
-                          <span className="font-black text-[#2D2D2D] bg-[#FFD93D] px-2.5 py-0.5 rounded-lg border border-[#E5B80B]">
-                            {item.foodDetail.priceRange}
-                          </span>
-                        )}
-                        {item.foodDetail.reservationNeeded && (
-                          <span className="bg-[#FFE3E3] text-[#EE5253] font-black px-2.5 py-0.5 rounded-lg border border-[#EE5253]/30">
-                            Reservation Recommended
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {item.foodDetail.recommendedDishes && item.foodDetail.recommendedDishes.length > 0 && (
-                      <div className="flex items-center flex-wrap gap-1.5 pt-1">
-                        <span className="text-stone-700 font-bold">Must-try:</span>
-                        {item.foodDetail.recommendedDishes.map((dish, dIdx) => (
-                          <span
-                            key={dIdx}
-                            className="bg-white text-stone-800 px-2.5 py-0.5 rounded-lg border border-stone-200 font-bold text-[11px] shadow-xs"
-                          >
-                            {dish}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Special Detail: Transportation Transit Details */}
-                {item.category === 'transport' && item.transportDetail && (
-                  <div className="bg-[#F3F0FF] border-2 border-[#A29BFE]/40 border-b-4 border-b-[#6C5CE7]/30 rounded-2xl p-4 mb-3 text-xs text-[#2D2D2D]">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2 font-black">
-                        {React.createElement(getTransportIcon(item.transportDetail.mode), { className: "w-4 h-4 text-[#6C5CE7]" })}
-                        <span className="capitalize text-stone-700">{item.transportDetail.mode} Line:</span>
-                        <span className="text-[#6C5CE7]">{item.transportDetail.route}</span>
-                      </div>
-                      {item.transportDetail.cost && (
-                        <span className="font-black text-[#6C5CE7] bg-white px-2.5 py-0.5 rounded-lg border border-[#A29BFE]/40">
-                          Fare: {item.transportDetail.cost}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Cost Estimate & Practical Tips */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-stone-100">
-                  <div className="flex items-center gap-4 text-xs">
-                    {item.costEstimate && (
-                      <div className="flex items-center gap-1 font-black text-stone-700">
-                        <DollarSign className="w-3.5 h-3.5 text-[#FFD93D]" />
-                        <span>{item.costEstimate}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions: Swap alternative, Photo, and Accurate Turn-by-Turn Google Maps */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      id={`btn-regen-${item.id}`}
-                      onClick={() => onRegenerateItem(activeDayIndex, item)}
-                      disabled={isRegenerating}
-                      className="inline-flex items-center gap-1 text-xs font-black text-[#2D2D2D] bg-[#FFD93D] hover:bg-[#F6C90E] border-b-2 border-[#E5B80B] px-3 py-1.5 rounded-xl transition-all shadow-xs active:translate-y-0.5"
-                    >
-                      <RotateCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin text-[#FF6B6B]' : ''}`} />
-                      <span>{isRegenerating ? 'Finding...' : 'Alternative'}</span>
-                    </button>
-
-                    {/* Accurate Turn-by-Turn Directions link */}
-                    <a
-                      href={directionsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      id={`link-maps-${item.id}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-black text-white bg-[#009688] hover:bg-[#00796b] border-b-2 border-[#00796b] px-3.5 py-1.5 rounded-xl transition-all shadow-xs active:translate-y-0.5"
-                      title={previousItem ? `Get directions from ${previousItem.title} to ${item.title}` : `Get directions to ${item.title}`}
-                    >
-                      <Navigation className="w-3.5 h-3.5" />
-                      <span>{previousItem ? 'Directions from Last Stop' : 'Get Directions'}</span>
-                      <ExternalLink className="w-3 h-3 text-teal-200" />
-                    </a>
-
-                    <a
-                      href={placeSearchUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 text-stone-500 hover:text-stone-800 bg-stone-50 hover:bg-stone-100 rounded-xl border border-stone-200 transition-colors"
-                      title="View Place on Google Maps"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                </div>
-
-                {/* Insider tip box */}
-                {item.tips && (
-                  <div className="mt-3 bg-[#FFF8F0] border border-[#FF6B6B]/25 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-[#2D2D2D] font-medium">
-                    <Lightbulb className="w-4 h-4 text-[#FF6B6B] shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-black text-[#FF6B6B]">Tip: </span>
-                      <span>{item.tips}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Photo Lightbox Modal with Stated Source & Multi-Photo View */}
+    <div className="space-y-8 pb-16">
+      {/* Photo Lightbox Modal */}
       {selectedPhotoModal && (
         <PhotoLightboxModal
           item={selectedPhotoModal.item}
           photoInfo={selectedPhotoModal.photoInfo}
           destination={destination}
-          dayIndex={activeDayIndex}
           onClose={() => setSelectedPhotoModal(null)}
-          onUpdatePhoto={onUpdateItemPhoto}
+          onSaveCustomPhoto={(newPhoto) => {
+            if (onUpdateItemPhoto) {
+              onUpdateItemPhoto(activeDayIndex, selectedPhotoModal.item.id, newPhoto);
+            }
+          }}
         />
       )}
+
+      {/* Day Picker Tactile Tabs Header */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        {days.map((day, idx) => {
+          const isActive = idx === activeDayIndex;
+          const completedCount = day.schedule.filter((i) => i.completed).length;
+
+          return (
+            <button
+              key={day.dayNumber}
+              type="button"
+              onClick={() => {
+                triggerHaptic('light');
+                onSelectDay(idx);
+              }}
+              className={`relative px-4 py-2.5 rounded-2xl font-black text-xs transition-all shrink-0 cursor-pointer flex items-center gap-2 border-2 ${
+                isActive
+                  ? 'bg-[#FF7A59] border-[#E05030] text-white shadow-md'
+                  : 'bg-[#FFFDF9] border-[#EAE0D0] text-stone-700 hover:border-stone-400'
+              }`}
+            >
+              <span>Day {day.dayNumber}</span>
+              {completedCount > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${isActive ? 'bg-white text-[#FF7A59]' : 'bg-stone-200 text-stone-700'}`}>
+                  {completedCount}/{day.schedule.length}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Day Overview Scrapbook Note */}
+      <div className="postcard-card p-6 rounded-3xl relative">
+        <div className="absolute -top-3 right-8">
+          <WashiTape color="gold" rotation={2} />
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="text-[11px] font-mono uppercase tracking-wider font-bold text-stone-400">
+              DAY {currentDay.dayNumber} OF {days.length} • {destination}
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black text-[#2D241E] font-cozy-serif">
+              {currentDay.title}
+            </h2>
+          </div>
+
+          <div className="shrink-0 text-xs font-bold text-stone-500 bg-[#FAF4EA] px-3 py-1.5 rounded-xl border border-[#EFE5D8]">
+            <span>✨ Drag sticky notes to re-order sequence</span>
+          </div>
+        </div>
+
+        <p className="text-xs sm:text-sm text-stone-600 leading-relaxed font-medium mt-2">
+          {currentDay.summary}
+        </p>
+      </div>
+
+      {/* ANIMATED VERTICAL TIMELINE CONTAINER */}
+      <div className="relative pl-7 sm:pl-10">
+        {/* Animated Drawing Route Line */}
+        <div className="absolute left-[13px] sm:left-[17px] top-4 bottom-8 w-1 bg-stone-300 -z-1 rounded-full overflow-hidden">
+          {/* Animated drawing ink bar */}
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: '100%' }}
+            transition={{ duration: 1.2, ease: 'easeInOut' }}
+            className="w-full bg-gradient-to-b from-[#FF7A59] via-[#F59E0B] to-[#285A34]"
+          />
+        </div>
+
+        {/* Drag & Drop Context */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={items.map((i) => i.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div>
+              {items.map((item, idx) => (
+                <SortableScrapbookItem
+                  key={item.id}
+                  item={item}
+                  dayIndex={activeDayIndex}
+                  idx={idx}
+                  destination={destination}
+                  onToggleComplete={onToggleComplete}
+                  onRegenerateItem={onRegenerateItem}
+                  onOpenPhotoLightbox={(it, p) => setSelectedPhotoModal({ item: it, photoInfo: p })}
+                  regeneratingItemId={regeneratingItemId}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
     </div>
   );
 };

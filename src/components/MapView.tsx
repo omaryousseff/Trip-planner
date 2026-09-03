@@ -333,23 +333,54 @@ export const MapView: React.FC<MapViewProps> = ({
             viewBox="0 0 800 420"
             className="w-full h-[280px] sm:h-[340px] drop-shadow-sm select-none"
           >
-            {/* Draw Sequential Connecting Route Path */}
+            {/* Draw Sequential Connecting Route Path with SVG id for vehicle tracking */}
             {projection.points.length > 1 && (
-              <path
-                d={projection.points.reduce((acc, pt, i) => {
-                  return i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
-                }, '')}
-                fill="none"
-                stroke="#FF6B6B"
-                strokeWidth="4"
-                strokeDasharray="8,6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="animate-pulse"
-              />
+              <>
+                <path
+                  id="scrapbookRouteTrack"
+                  d={projection.points.reduce((acc, pt, i) => {
+                    return i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
+                  }, '')}
+                  fill="none"
+                  stroke="#FF7A59"
+                  strokeWidth="3.5"
+                  strokeDasharray="8,6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Animated Moving Vehicle along Dotted Route (Airplane / Train / Walking) */}
+                <g>
+                  <animateMotion
+                    dur="12s"
+                    repeatCount="indefinite"
+                    rotate="auto"
+                  >
+                    <mpath href="#scrapbookRouteTrack" />
+                  </animateMotion>
+                  <g transform="translate(-16, -16)">
+                    <circle
+                      cx="16"
+                      cy="16"
+                      r="14"
+                      fill="#2D241E"
+                      stroke="#FFD93D"
+                      strokeWidth="2"
+                    />
+                    <text
+                      x="16"
+                      y="20"
+                      textAnchor="middle"
+                      fontSize="13"
+                    >
+                      {travelMode === 'transit' ? '🚆' : travelMode === 'driving' ? '🚗' : '✈️'}
+                    </text>
+                  </g>
+                </g>
+              </>
             )}
 
-            {/* Render Pins on True Relative Geographic Positions */}
+            {/* Render Pins on True Relative Geographic Positions with Pop-out Polaroids */}
             {projection.points.map((pt, i) => {
               const isSelected = activeItemIndex === i;
               const place = pt.place;
@@ -357,17 +388,19 @@ export const MapView: React.FC<MapViewProps> = ({
                 <g
                   key={place.id || i}
                   transform={`translate(${pt.x}, ${pt.y})`}
-                  className="cursor-pointer transition-transform duration-200 hover:scale-110"
-                  onClick={() => setActiveItemIndex(i)}
+                  className="cursor-pointer transition-transform duration-200"
+                  onClick={() => {
+                    setActiveItemIndex(i);
+                  }}
                 >
                   {/* Outer pulse circle for selected pin */}
                   {isSelected && (
                     <circle
                       r="26"
                       fill="none"
-                      stroke="#FF6B6B"
+                      stroke="#FF7A59"
                       strokeWidth="3"
-                      opacity="0.6"
+                      opacity="0.7"
                       className="animate-ping"
                     />
                   )}
@@ -378,7 +411,7 @@ export const MapView: React.FC<MapViewProps> = ({
                   {/* Pin Body */}
                   <circle
                     r={isSelected ? '18' : '15'}
-                    fill={isSelected ? '#1A1A1A' : '#FF6B6B'}
+                    fill={isSelected ? '#2D241E' : '#FF7A59'}
                     stroke="#FFFFFF"
                     strokeWidth="3"
                     className="transition-colors"
@@ -396,29 +429,100 @@ export const MapView: React.FC<MapViewProps> = ({
                     {place.displayIndex}
                   </text>
 
-                  {/* Pin Title Label Bubble */}
-                  <g transform="translate(0, -28)">
-                    <rect
-                      x="-60"
-                      y="-12"
-                      width="120"
-                      height="22"
-                      rx="6"
-                      fill="rgba(255, 255, 255, 0.95)"
-                      stroke="#E5E7EB"
-                      strokeWidth="1"
-                    />
-                    <text
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill="#1F2937"
-                      fontSize="10"
-                      fontWeight="bold"
-                      fontFamily="sans-serif"
-                    >
-                      {place.title.length > 18 ? `${place.title.slice(0, 16)}...` : place.title}
-                    </text>
-                  </g>
+                  {/* POP-OUT POLAROID PIN (Enhanced when selected) */}
+                  {isSelected ? (
+                    <g transform="translate(-65, -135)">
+                      {/* Polaroid White Card Body */}
+                      <rect
+                        x="0"
+                        y="0"
+                        width="130"
+                        height="115"
+                        rx="6"
+                        fill="#FFFFFF"
+                        stroke="#2D241E"
+                        strokeWidth="2"
+                        filter="drop-shadow(0px 8px 16px rgba(0,0,0,0.2))"
+                      />
+
+                      {/* Mini Washi Tape on Polaroid */}
+                      <rect
+                        x="35"
+                        y="-6"
+                        width="60"
+                        height="12"
+                        rx="2"
+                        fill="rgba(255, 122, 89, 0.85)"
+                      />
+
+                      {/* Photo Image inside Polaroid */}
+                      <clipPath id={`polaroidClip-${i}`}>
+                        <rect x="8" y="10" width="114" height="68" rx="3" />
+                      </clipPath>
+                      <image
+                        href={place.photoInfo.url}
+                        x="8"
+                        y="10"
+                        width="114"
+                        height="68"
+                        preserveAspectRatio="xMidYMid slice"
+                        clipPath={`url(#polaroidClip-${i})`}
+                      />
+
+                      {/* Handwritten Caption Title */}
+                      <text
+                        x="65"
+                        y="94"
+                        textAnchor="middle"
+                        fill="#1F2937"
+                        fontSize="12"
+                        fontWeight="bold"
+                        fontFamily="'Caveat', cursive, sans-serif"
+                      >
+                        {place.title.length > 16 ? `${place.title.slice(0, 15)}...` : place.title}
+                      </text>
+
+                      {/* Stated Source Badge */}
+                      <text
+                        x="65"
+                        y="107"
+                        textAnchor="middle"
+                        fill="#6B7280"
+                        fontSize="8"
+                        fontWeight="bold"
+                        fontFamily="sans-serif"
+                      >
+                        {place.photoInfo.source.length > 20 ? place.photoInfo.source.slice(0, 18) + '...' : place.photoInfo.source}
+                      </text>
+
+                      {/* Polaroid bottom pointer triangle */}
+                      <polygon points="60,115 70,115 65,124" fill="#2D241E" />
+                    </g>
+                  ) : (
+                    /* Standard Mini Tag when not selected */
+                    <g transform="translate(0, -28)">
+                      <rect
+                        x="-55"
+                        y="-11"
+                        width="110"
+                        height="20"
+                        rx="5"
+                        fill="rgba(255, 255, 255, 0.95)"
+                        stroke="#E5E7EB"
+                        strokeWidth="1"
+                      />
+                      <text
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fill="#1F2937"
+                        fontSize="9"
+                        fontWeight="bold"
+                        fontFamily="'Caveat', cursive, sans-serif"
+                      >
+                        {place.title.length > 15 ? `${place.title.slice(0, 14)}...` : place.title}
+                      </text>
+                    </g>
+                  )}
                 </g>
               );
             })}

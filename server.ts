@@ -7,6 +7,7 @@ import { createServer as createViteServer } from "vite";
 import { generateFallbackTripPlan, generateFallbackItem } from "./src/data/fallbackGenerator";
 import { resolvePlaceCoordinates } from "./src/utils/geoCoordinates";
 import { getLandmarkPhoto } from "./src/utils/landmarkImages";
+import { fetchPinterestPlacePhoto, scrapePinterestPins } from "./src/utils/pinterestScraper";
 
 dotenv.config();
 
@@ -30,53 +31,70 @@ async function startServer() {
   async function fetchRealPlacePhoto(title: string, location?: string, city?: string) {
     if (!title || typeof title !== 'string') return null;
     const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
-    const cacheKey = `${cleanTitle.toLowerCase()}_${(city || '').toLowerCase().trim()}`;
+    const cleanCity = (city || '').replace(/\([^)]*\)/g, '').trim();
+    // Strictly search: (place name city) for accurate place matching
+    const cacheKey = `${cleanTitle.toLowerCase()}_${cleanCity.toLowerCase()}`;
+
     if (photoCache.has(cacheKey)) {
       return photoCache.get(cacheKey);
     }
 
     try {
-      const searchQuery = `${cleanTitle} ${city || ''}`.trim();
-      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrsearch=${encodeURIComponent(searchQuery)}&gsrlimit=1&prop=pageimages|extracts&piprop=thumbnail|original&pithumbsize=1200&exintro=1&explaintext=1`;
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const GOOGLE_API_KEY = process.env.GOOGLE_SEARCH_API_KEY;
+      const GOOGLE_CX = process.env.GOOGLE_SEARCH_CX;
 
-      const res = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'TripPlannerCozyEdition/1.0 (contact@aistudio.build)' },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      // Tier 1: If Google Custom Search API credentials are provided, search Pinterest for (place name city)
+      if (GOOGLE_API_KEY && GOOGLE_CX) {
+        const searchQuery = `${cleanTitle} ${cleanCity}`.trim();
+        const searchUrl = `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(searchQuery)}&cx=${GOOGLE_CX}&searchType=image&siteSearch=pinterest.com&key=${GOOGLE_API_KEY}&num=3`;
 
-      if (res.ok) {
-        const data = await res.json();
-        const pages = data.query?.pages;
-        if (pages) {
-          const pageId = Object.keys(pages)[0];
-          const page = pages[pageId];
-          const imgUrl = page?.thumbnail?.source || page?.original?.source;
-          if (imgUrl) {
-            const officialUrl = page.fullurl || `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title || cleanTitle)}`;
-            const tripAdvisorSearchUrl = `https://www.tripadvisor.com/Search?q=${encodeURIComponent(`${cleanTitle} ${city || ''}`.trim())}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+        const res = await fetch(searchUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && data.items.length > 0) {
+            const topItem = data.items[0];
+            const allUrls = data.items.slice(0, 3).map((item: any) => item.link);
+            const alternativePhotos = data.items.slice(1, 3).map((item: any, idx: number) => ({
+              url: item.link,
+              caption: item.title || `${cleanTitle} - Angle ${idx + 2}`,
+              source: 'Pinterest',
+              sourceType: 'pinterest' as const,
+              pinUrl: item.image?.contextLink || item.link,
+            }));
+
             const photoResult = {
-              url: imgUrl,
-              caption: page.title || title,
-              source: `Official Cultural Registry & TripAdvisor Archive`,
-              sourceType: 'heritage_archive',
-              officialWebsiteUrl: officialUrl,
-              tripAdvisorUrl: tripAdvisorSearchUrl,
-              description: page.extract ? page.extract.slice(0, 160) + '...' : '',
-              googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${cleanTitle} ${location || ''} ${city || ''}`.trim())}`
+              url: topItem.link,
+              caption: topItem.title || title,
+              source: 'Pinterest',
+              sourceType: 'pinterest' as const,
+              officialWebsiteUrl: topItem.image?.contextLink || topItem.link,
+              tripAdvisorUrl: topItem.image?.contextLink || topItem.link,
+              description: topItem.snippet || `${cleanTitle} in ${cleanCity}`,
+              googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${cleanTitle} ${location || ''} ${cleanCity}`.trim())}`,
+              photos: allUrls, // Up to 3 best photos from Pinterest
+              alternativePhotos,
             };
+
             photoCache.set(cacheKey, photoResult);
             return photoResult;
           }
         }
       }
-    } catch (err) {
-      // Gracefully continue to fallback photo
-    }
 
+      // Tier 2: Direct Keyless Pinterest Web Scraper (No API keys required, searches strictly: place name city)
+      const scraped = await fetchPinterestPlacePhoto(cleanTitle, location, cleanCity);
+      if (scraped && scraped.url) {
+        photoCache.set(cacheKey, scraped);
+        return scraped;
+      }
+    } catch (err) {
+      console.log("Pinterest image fetch encountered an issue, using curated fallback.");
+    }
     return null;
   }
 
@@ -114,6 +132,8 @@ async function startServer() {
         dietary = [],
         interests = [],
         specialRequirements = "",
+        mustHaveInterests = [],
+        avoidInterests = [],
       } = req.body;
 
       if (!destination || typeof destination !== "string" || !destination.trim()) {
@@ -134,6 +154,8 @@ Trip Preferences:
 - Travel Pace: ${pace}
 - Dietary Preferences: ${dietary.length > 0 ? dietary.join(", ") : "Local cuisine, open to anything"}
 - Interests & Hobbies: ${interests.length > 0 ? interests.join(", ") : "Sightseeing, food, iconic culture"}
+${mustHaveInterests.length > 0 ? `- HIGH PRIORITY MUST-HAVE EXPERIENCES (⭐): ${mustHaveInterests.join(", ")}` : ""}
+${avoidInterests.length > 0 ? `- STRICTLY AVOID & FILTER OUT (✕): ${avoidInterests.join(", ")} (Do NOT suggest these types of venues/activities)` : ""}
 ${specialRequirements ? `- Special Notes/Requests: ${specialRequirements}` : ""}
 
 CRITICAL REQUIREMENTS:
@@ -378,14 +400,20 @@ You MUST respond with a single valid JSON object strictly matching this schema (
               item.alternativePhotos = photo.alternativePhotos;
               item.googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.title} ${item.location || ''} ${planData.destination || destination}`.trim())}`;
 
-              // Concurrently fetch authentic real landmark photo
+              // Concurrently fetch authentic real landmark photo from Pinterest (place name city)
               photoPromises.push(
                 fetchRealPlacePhoto(item.title, item.location, planData.destination || destination).then((live) => {
                   if (live && live.url) {
                     item.imageUrl = live.url;
                     item.photoCaption = live.caption;
-                    item.photoSource = live.source;
-                    item.photoSourceType = live.sourceType;
+                    item.photoSource = 'Pinterest';
+                    item.photoSourceType = 'pinterest';
+                    if (live.photos && live.photos.length > 0) {
+                      item.photos = live.photos;
+                    }
+                    if (live.alternativePhotos && live.alternativePhotos.length > 0) {
+                      item.alternativePhotos = live.alternativePhotos;
+                    }
                     if (live.officialWebsiteUrl) item.officialWebsiteUrl = live.officialWebsiteUrl;
                     if (live.tripAdvisorUrl) item.tripAdvisorUrl = live.tripAdvisorUrl;
                   }
@@ -499,13 +527,16 @@ Provide a single JSON object matching:
         itemData.photoCaption = photo.caption;
         itemData.googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${itemData.title} ${itemData.location || ''} ${destination}`.trim())}`;
         
-        // Try live landmark photo
+        // Try live landmark photo from Pinterest (place name city)
         try {
           const live = await fetchRealPlacePhoto(itemData.title, itemData.location, destination);
           if (live && live.url) {
             itemData.imageUrl = live.url;
             itemData.photoCaption = live.caption;
-            itemData.photoSource = live.source;
+            itemData.photoSource = 'Pinterest';
+            itemData.photoSourceType = 'pinterest';
+            if (live.photos) itemData.photos = live.photos;
+            if (live.alternativePhotos) itemData.alternativePhotos = live.alternativePhotos;
           }
         } catch {}
       }
@@ -518,7 +549,7 @@ Provide a single JSON object matching:
     }
   });
 
-  // Dedicated endpoint to fetch place/landmark photography from Google & Wikimedia Places
+  // Dedicated endpoint to fetch place/landmark photography from Pinterest
   app.get("/api/place-photo", async (req, res) => {
     try {
       const query = (req.query.query as string) || "";
@@ -547,6 +578,31 @@ Provide a single JSON object matching:
       });
     } catch (err: any) {
       return res.status(500).json({ error: "Failed to fetch place photo" });
+    }
+  });
+
+  // Dedicated server-side Pinterest Scraping Route (Keyless)
+  app.get("/api/pinterest/search", async (req, res) => {
+    try {
+      const q = (req.query.q as string) || (req.query.query as string) || "";
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+      if (!q || !q.trim()) {
+        return res.status(400).json({ error: "Query parameter 'q' is required." });
+      }
+
+      const pins = await scrapePinterestPins(q, { limit });
+      return res.json({
+        success: true,
+        query: q,
+        count: pins.length,
+        pins,
+      });
+    } catch (err: any) {
+      console.error("Pinterest scraping endpoint error:", err);
+      return res.status(500).json({
+        error: "Failed to scrape Pinterest pins",
+        message: err?.message || String(err),
+      });
     }
   });
 

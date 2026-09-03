@@ -1,4 +1,4 @@
-// Verified high-resolution travel photography and landmark image resolver with official site & TripAdvisor attribution
+// Verified high-resolution travel photography and landmark image resolver with Pinterest & official attribution
 import { AlternativePhoto, PhotoSourceType } from '../types';
 export type { AlternativePhoto, PhotoSourceType };
 
@@ -11,6 +11,7 @@ export interface LandmarkPhotoInfo {
   sourceType: PhotoSourceType;
   officialWebsiteUrl?: string;
   tripAdvisorUrl?: string;
+  photos?: string[]; // Best 3 photos of the place
   alternativePhotos?: AlternativePhoto[];
 }
 
@@ -21,6 +22,7 @@ interface LandmarkData {
   sourceType: PhotoSourceType;
   officialWebsiteUrl?: string;
   tripAdvisorUrl?: string;
+  photos?: string[];
   alternativePhotos?: AlternativePhoto[];
 }
 
@@ -496,6 +498,7 @@ export function getLandmarkPhoto(
     location?: string;
     category?: string;
     imageUrl?: string;
+    photos?: string[];
     photoCaption?: string;
     photoSource?: string;
     photoSourceType?: string;
@@ -509,8 +512,31 @@ export function getLandmarkPhoto(
 ): LandmarkPhotoInfo {
   // If item explicitly already has a valid image URL, preserve and enrich with stated source
   if (item.imageUrl && item.imageUrl.startsWith('http')) {
-    const rawSource = item.photoSource || 'Official Website & Verified Archive';
-    const rawSourceType = (item.photoSourceType as any) || (rawSource.toLowerCase().includes('tripadvisor') ? 'tripadvisor' : 'official_website');
+    const rawSource = item.photoSource || 'Pinterest';
+    const rawSourceType = (item.photoSourceType as any) || (rawSource.toLowerCase().includes('pinterest') ? 'pinterest' : (rawSource.toLowerCase().includes('tripadvisor') ? 'tripadvisor' : 'official_website'));
+    
+    // Assemble the best 3 photos
+    const allUrls: string[] = [item.imageUrl];
+    if (item.photos && item.photos.length > 0) {
+      item.photos.forEach((u) => {
+        if (u && !allUrls.includes(u)) allUrls.push(u);
+      });
+    }
+    if (item.alternativePhotos && item.alternativePhotos.length > 0) {
+      item.alternativePhotos.forEach((p) => {
+        if (p.url && !allUrls.includes(p.url)) allUrls.push(p.url);
+      });
+    }
+    const top3Urls = allUrls.slice(0, 3);
+    const altPhotos: AlternativePhoto[] = item.alternativePhotos && item.alternativePhotos.length > 0
+      ? item.alternativePhotos
+      : top3Urls.slice(1).map((u, i) => ({
+          url: u,
+          source: rawSource,
+          caption: `${item.photoCaption || item.title} - View ${i + 2}`,
+          sourceType: rawSourceType,
+        }));
+
     return {
       url: item.imageUrl,
       caption: item.photoCaption || item.title,
@@ -519,15 +545,9 @@ export function getLandmarkPhoto(
       source: rawSource,
       sourceType: rawSourceType,
       officialWebsiteUrl: item.officialWebsiteUrl,
-      tripAdvisorUrl: item.tripAdvisorUrl || `https://www.tripadvisor.com/Search?q=${encodeURIComponent(`${item.title} ${destination}`)}`,
-      alternativePhotos: item.alternativePhotos || [
-        {
-          url: item.imageUrl,
-          source: rawSource,
-          caption: item.photoCaption || item.title,
-          sourceType: rawSourceType,
-        }
-      ],
+      tripAdvisorUrl: item.tripAdvisorUrl || item.officialWebsiteUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.title} ${destination}`)}`,
+      photos: top3Urls,
+      alternativePhotos: altPhotos,
     };
   }
 
@@ -540,6 +560,7 @@ export function getLandmarkPhoto(
   // 1. Direct Famous Landmark Match with authentic official website & TripAdvisor source
   for (const [key, photo] of Object.entries(FAMOUS_LANDMARKS_PHOTOS)) {
     if (combinedText.includes(key)) {
+      const allUrls = [photo.url, ...(photo.photos || []), ...(photo.alternativePhotos || []).map((p) => p.url)].filter((u, i, arr) => arr.indexOf(u) === i).slice(0, 3);
       return {
         url: photo.url,
         caption: photo.caption,
@@ -548,21 +569,14 @@ export function getLandmarkPhoto(
         source: photo.source,
         sourceType: photo.sourceType,
         officialWebsiteUrl: photo.officialWebsiteUrl,
-        tripAdvisorUrl: photo.tripAdvisorUrl || `https://www.tripadvisor.com/Search?q=${encodeURIComponent(`${photo.caption} ${destination}`)}`,
-        alternativePhotos: photo.alternativePhotos || [
-          {
-            url: photo.url,
-            source: photo.source,
-            caption: photo.caption,
-            sourceType: photo.sourceType,
-          },
-          {
-            url: photo.url,
-            source: 'TripAdvisor Verified Traveler Archive',
-            caption: `${photo.caption} Traveler Perspective`,
-            sourceType: 'tripadvisor',
-          }
-        ],
+        tripAdvisorUrl: photo.tripAdvisorUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${photo.caption} ${destination}`)}`,
+        photos: allUrls,
+        alternativePhotos: photo.alternativePhotos || allUrls.slice(1).map((u, i) => ({
+          url: u,
+          source: photo.source,
+          caption: `${photo.caption} - Perspective ${i + 2}`,
+          sourceType: photo.sourceType,
+        })),
       };
     }
   }

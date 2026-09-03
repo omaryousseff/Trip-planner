@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TripPreferences } from '../types';
+import { WashiTape } from './ScrapbookElements';
+import { triggerHaptic } from '../utils/haptics';
 import { 
   CuteStarMascot, 
   CozyCompass, 
@@ -25,7 +27,15 @@ import {
   PenTool, 
   Compass as CompassIcon,
   Search,
-  Star
+  Star,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Utensils,
+  Landmark,
+  Compass,
+  AlertCircle
 } from 'lucide-react';
 
 interface PreferenceFormProps {
@@ -95,16 +105,215 @@ const QUICK_DESTINATIONS = [
   { name: "New York", tag: "NEW YORK 🗽", query: "New York City, USA", pillClass: "bg-[#FFF6E9] text-[#544136] border-[#EADBCE]" },
 ];
 
-const FOOD_AND_ACTIVITY_TAGS = [
-  { id: "Local Specialties", label: "Local Specialties", color: "bg-[#D7EED9] text-[#285A34] border-[#B8DEC0]" },
-  { id: "Iconic Landmarks", label: "Iconic Landmarks", color: "bg-[#FFB8A5] text-[#782310] border-[#FFA085]", star: true },
-  { id: "Museums & Art", label: "Museum & Art", color: "bg-[#FFD9E3] text-[#7A2542] border-[#FFBACB]" },
-  { id: "Parks & Nature", label: "Dining & Nature", color: "bg-[#E2DEFD] text-[#3D3582] border-[#C8C2F8]" },
-  { id: "Photography Spots", label: "Photography Spots", color: "bg-[#EDE7E0] text-[#504439] border-[#DDD3C7]" },
-  { id: "Architecture & Design", label: "Architecture & History", color: "bg-[#FFF3B0] text-[#6E5910] border-[#FBE67D]" },
-  { id: "Hidden Neighborhoods", label: "Hidden Neighborhoods", color: "bg-[#D8F3E5] text-[#1E5C3B] border-[#B4E5CB]" },
-  { id: "Shopping & Markets", label: "Shopping & Markets", color: "bg-[#FFEAD1] text-[#754412] border-[#FFD4A8]" },
-  { id: "Street Food Enthusiast", label: "Street Food & Cafes", color: "bg-[#FFE2D6] text-[#782815] border-[#FFC2AF]" },
+export type TagStatus = 'none' | 'selected' | 'must-have' | 'avoid';
+
+export interface PreferenceTag {
+  id: string;
+  label: string;
+  category: 'food' | 'culture' | 'action';
+  iconEmoji: string;
+  color: string;
+  defaultStatus?: TagStatus;
+  description: string;
+}
+
+export const PREFERENCE_CATEGORIES = [
+  {
+    id: 'food' as const,
+    title: 'Food & Dining',
+    shortTitle: 'Food & Dining',
+    iconEmoji: '🍽️',
+    description: 'Street food, fine dining, artisanal cafes & bakeries, and dietary focuses.',
+    colorTheme: 'text-[#8C3415] bg-[#FFF2EB] border-[#FFD0BE]',
+    activeTabClass: 'bg-[#FF7A59] text-white shadow-xs',
+  },
+  {
+    id: 'culture' as const,
+    title: 'Culture & Discovery',
+    shortTitle: 'Culture & Discovery',
+    iconEmoji: '🏛️',
+    description: 'Iconic landmarks, museums, architecture, and secret local neighborhoods.',
+    colorTheme: 'text-[#4F369E] bg-[#F3EEFF] border-[#D9CAFC]',
+    activeTabClass: 'bg-[#7C5CBF] text-white shadow-xs',
+  },
+  {
+    id: 'action' as const,
+    title: 'Action & Leisure',
+    shortTitle: 'Action & Leisure',
+    iconEmoji: '🏄',
+    description: 'Beaches, live sports, forest hikes, retail shopping, and onsen retreats.',
+    colorTheme: 'text-[#126855] bg-[#E7F8F4] border-[#B9E9DC]',
+    activeTabClass: 'bg-[#1D8E74] text-white shadow-xs',
+  },
+];
+
+export const PREFERENCE_TAGS: PreferenceTag[] = [
+  // 1. Food & Dining
+  {
+    id: 'Street Food & Markets',
+    label: 'Street Food & Markets',
+    category: 'food',
+    iconEmoji: '🍢',
+    color: 'bg-[#FFE2D6] text-[#782815] border-[#FFC2AF]',
+    description: 'Night markets, skewer alleys, and bustling food halls'
+  },
+  {
+    id: 'Fine Dining & Tasting',
+    label: 'Fine Dining',
+    category: 'food',
+    iconEmoji: '🍷',
+    color: 'bg-[#FDF2F4] text-[#8C2442] border-[#F8C8D6]',
+    description: 'Chef tasting menus, wine pairings & premier culinary art'
+  },
+  {
+    id: 'Cafes & Bakeries',
+    label: 'Cafes & Bakeries',
+    category: 'food',
+    iconEmoji: '☕',
+    color: 'bg-[#FFF6E5] text-[#78481A] border-[#FDE0A2]',
+    description: 'Specialty pour-overs, artisanal pastries & matcha salons'
+  },
+  {
+    id: 'Local Specialties',
+    label: 'Local Specialties',
+    category: 'food',
+    iconEmoji: '🍜',
+    color: 'bg-[#D7EED9] text-[#285A34] border-[#B8DEC0]',
+    description: 'Iconic regional dishes unique to this destination'
+  },
+  {
+    id: 'Dietary Focus: Halal',
+    label: 'Dietary: Halal',
+    category: 'food',
+    iconEmoji: '🌙',
+    color: 'bg-[#E0F8F6] text-[#13665F] border-[#B8EFEA]',
+    description: 'Certified halal restaurants & Muslim-friendly menus'
+  },
+  {
+    id: 'Dietary Focus: Vegan & Veg',
+    label: 'Dietary: Vegan / Veg',
+    category: 'food',
+    iconEmoji: '🌱',
+    color: 'bg-[#E2F7D8] text-[#266817] border-[#C3EEB0]',
+    description: 'Plant-forward bistros, temple food & organic cafes'
+  },
+  {
+    id: 'Dietary Focus: Gluten-Free',
+    label: 'Dietary: Gluten-Free',
+    category: 'food',
+    iconEmoji: '🌾',
+    color: 'bg-[#FFF0DF] text-[#7E4B14] border-[#FAD7AA]',
+    description: 'Celiac-safe dining & grain-conscious options'
+  },
+  {
+    id: 'Craft Cocktails & Bars',
+    label: 'Craft Cocktails & Bars',
+    category: 'food',
+    iconEmoji: '🍸',
+    color: 'bg-[#EBE7FD] text-[#453787] border-[#D4CBFA]',
+    description: 'Hidden speakeasies, izakayas, and rooftop mixology'
+  },
+
+  // 2. Culture & Discovery
+  {
+    id: 'Iconic Landmarks',
+    label: 'Iconic Landmarks',
+    category: 'culture',
+    iconEmoji: '🏛️',
+    color: 'bg-[#FFB8A5] text-[#782310] border-[#FFA085]',
+    defaultStatus: 'must-have',
+    description: 'World-famous monuments, towers & essential sightlines'
+  },
+  {
+    id: 'Museums & Art',
+    label: 'Museums & Art',
+    category: 'culture',
+    iconEmoji: '🎨',
+    color: 'bg-[#FFD9E3] text-[#7A2542] border-[#FFBACB]',
+    description: 'Fine art galleries, interactive exhibitions & sculpture'
+  },
+  {
+    id: 'Architecture & History',
+    label: 'Architecture & History',
+    category: 'culture',
+    iconEmoji: '⛩️',
+    color: 'bg-[#FFF3B0] text-[#6E5910] border-[#FBE67D]',
+    description: 'Centuries-old heritage, historic temples & design feats'
+  },
+  {
+    id: 'Hidden Local Gems',
+    label: 'Hidden Local Gems',
+    category: 'culture',
+    iconEmoji: '🔍',
+    color: 'bg-[#D8F3E5] text-[#1E5C3B] border-[#B4E5CB]',
+    description: 'Intimate backstreets, artisan workshops & non-touristy pockets'
+  },
+  {
+    id: 'Cultural Workshops',
+    label: 'Cultural Workshops',
+    category: 'culture',
+    iconEmoji: '🍵',
+    color: 'bg-[#FFEAD1] text-[#754412] border-[#FFD4A8]',
+    description: 'Tea ceremonies, pottery, cooking & calligraphy classes'
+  },
+  {
+    id: 'Photography Spots',
+    label: 'Photography Spots',
+    category: 'culture',
+    iconEmoji: '📷',
+    color: 'bg-[#EDE7E0] text-[#504439] border-[#DDD3C7]',
+    description: 'Golden hour panoramas, neon alleys & cinematic vistas'
+  },
+
+  // 3. Action & Leisure
+  {
+    id: 'Beaches & Pools',
+    label: 'Beaches & Pools',
+    category: 'action',
+    iconEmoji: '🏖️',
+    color: 'bg-[#E0F4FF] text-[#115C8C] border-[#B8E3FF]',
+    description: 'Coastal beach clubs, sunbathing & ocean swimming'
+  },
+  {
+    id: 'Live Sports & Events',
+    label: 'Live Sports & Events',
+    category: 'action',
+    iconEmoji: '🏀',
+    color: 'bg-[#FFE5D4] text-[#8C3A0A] border-[#FFC8A3]',
+    description: 'Arena basketball, soccer matches, baseball & lively sports bars'
+  },
+  {
+    id: 'Nature & Outdoors',
+    label: 'Nature & Outdoors',
+    category: 'action',
+    iconEmoji: '🌲',
+    color: 'bg-[#D7EED9] text-[#285A34] border-[#B8DEC0]',
+    description: 'National parks, mountain hiking, rivers & scenic gardens'
+  },
+  {
+    id: 'Retail Shopping & Vintage',
+    label: 'Retail Shopping',
+    category: 'action',
+    iconEmoji: '🛍️',
+    color: 'bg-[#FFEAD1] text-[#754412] border-[#FFD4A8]',
+    description: 'Flagship fashion, vintage thrift streets & local markets'
+  },
+  {
+    id: 'Nightlife & Entertainment',
+    label: 'Nightlife & Clubs',
+    category: 'action',
+    iconEmoji: '🪩',
+    color: 'bg-[#F3E8FF] text-[#6B21A8] border-[#E9D5FF]',
+    description: 'Live music venues, jazz cellars, rooftop lounges & dance clubs'
+  },
+  {
+    id: 'Wellness & Spas / Onsen',
+    label: 'Wellness & Spas',
+    category: 'action',
+    iconEmoji: '♨️',
+    color: 'bg-[#F1F5F9] text-[#334155] border-[#CBD5E1]',
+    description: 'Thermal hot springs, traditional baths, saunas & massage retreats'
+  },
 ];
 
 export const PreferenceForm: React.FC<PreferenceFormProps> = ({
@@ -119,18 +328,98 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
   const [travelerType, setTravelerType] = useState('Couple');
   const [budget, setBudget] = useState<'Budget' | 'Moderate' | 'Luxury'>('Moderate');
   const [pace, setPace] = useState<'Relaxed' | 'Balanced' | 'Fast'>('Balanced');
-  const [selectedTags, setSelectedTags] = useState<string[]>([
-    'Local Specialties',
-    'Iconic Landmarks',
-    'Museums & Art',
-    'Architecture & Design'
-  ]);
+  
+  // Tag states: 'none' | 'selected' | 'must-have' | 'avoid'
+  const [tagStates, setTagStates] = useState<Record<string, TagStatus>>({
+    'Iconic Landmarks': 'must-have',
+    'Local Specialties': 'selected',
+    'Museums & Art': 'selected',
+    'Street Food & Markets': 'selected',
+    'Architecture & History': 'selected',
+  });
+
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState(0);
   const [notes, setNotes] = useState('');
 
-  const toggleTag = (id: string) => {
-    setSelectedTags(prev => 
-      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
-    );
+  // Long press timer & mobile double-tap ref
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTapRef = useRef<{ id: string; time: number } | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleToggleTag = (id: string) => {
+    triggerHaptic('light');
+    setTagStates(prev => {
+      const current = prev[id] || 'none';
+      if (current === 'none') {
+        return { ...prev, [id]: 'selected' };
+      } else {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+    });
+  };
+
+  const handleSetMustHave = (id: string, e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) e.stopPropagation();
+    triggerHaptic('medium');
+    setTagStates(prev => {
+      const current = prev[id] || 'none';
+      if (current === 'must-have') {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      return { ...prev, [id]: 'must-have' };
+    });
+  };
+
+  const handleSetAvoid = (id: string, e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) e.stopPropagation();
+    triggerHaptic('strong');
+    setTagStates(prev => {
+      const current = prev[id] || 'none';
+      if (current === 'avoid') {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      return { ...prev, [id]: 'avoid' };
+    });
+  };
+
+  const handleTagPointerDown = (id: string) => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    longPressTimerRef.current = setTimeout(() => {
+      handleSetAvoid(id);
+      longPressTimerRef.current = null;
+    }, 550);
+  };
+
+  const handleTagPointerUp = (id: string) => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+      
+      // Check for double tap on touch
+      const now = Date.now();
+      if (lastTapRef.current && lastTapRef.current.id === id && now - lastTapRef.current.time < 350) {
+        handleSetMustHave(id);
+        lastTapRef.current = null;
+      } else {
+        lastTapRef.current = { id, time: now };
+        handleToggleTag(id);
+      }
+    }
+  };
+
+  const handleTagPointerCancel = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
   };
 
   const handleSelectTravelerType = (type: string, count: number) => {
@@ -144,8 +433,36 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
       setDestination('Tokyo, Japan');
     }
 
-    const dietary = selectedTags.filter(t => ['Local Specialties', 'Street Food Enthusiast'].includes(t));
-    const interests = selectedTags.filter(t => !['Local Specialties', 'Street Food Enthusiast'].includes(t));
+    const dietary = Object.entries(tagStates)
+      .filter(([id, state]) => {
+        const tag = PREFERENCE_TAGS.find(t => t.id === id);
+        return tag?.category === 'food' && (state === 'selected' || state === 'must-have');
+      })
+      .map(([id]) => id);
+
+    const interests = Object.entries(tagStates)
+      .filter(([id, state]) => {
+        const tag = PREFERENCE_TAGS.find(t => t.id === id);
+        return tag?.category !== 'food' && (state === 'selected' || state === 'must-have');
+      })
+      .map(([id]) => id);
+
+    const mustHaves = Object.entries(tagStates)
+      .filter(([_, state]) => state === 'must-have')
+      .map(([id]) => id);
+
+    const avoids = Object.entries(tagStates)
+      .filter(([_, state]) => state === 'avoid')
+      .map(([id]) => id);
+
+    // Enriched notes with explicit AI directives
+    let combinedNotes = notes.trim();
+    if (mustHaves.length > 0) {
+      combinedNotes += (combinedNotes ? ' ' : '') + `[HIGH-PRIORITY MUST-HAVES: ${mustHaves.join(', ')}]`;
+    }
+    if (avoids.length > 0) {
+      combinedNotes += (combinedNotes ? ' ' : '') + `[STRICTLY AVOID & FILTER OUT: ${avoids.join(', ')}]`;
+    }
 
     onSubmit({
       destination: destination.trim() || 'Tokyo, Japan',
@@ -157,7 +474,9 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
       pace,
       dietary: dietary.length > 0 ? dietary : ['Local Specialties'],
       interests: interests.length > 0 ? interests : ['Iconic Landmarks'],
-      specialRequirements: notes,
+      mustHaveInterests: mustHaves,
+      avoidInterests: avoids,
+      specialRequirements: combinedNotes,
     });
   };
 
@@ -552,40 +871,434 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
           </div>
         </div>
 
-        {/* 8. "FOOD & ACTIVITY PREFERENCES" PASTEL CHIPS */}
-        <div className="cozy-card p-5 sm:p-7 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs sm:text-sm font-black text-[#3E3025] tracking-wider uppercase flex items-center gap-2">
-              <span>✦</span>
-              <span>FOOD & ACTIVITY PREFERENCES</span>
-            </h3>
-            <span className="text-[11px] text-stone-400 font-bold">
-              {selectedTags.length} selected
-            </span>
+        {/* 8. SPLIT PREFERENCE CATEGORIES (FOOD & DINING, CULTURE & DISCOVERY, ACTION & LEISURE) WITH CAROUSEL & WEIGHTED SELECTION */}
+        <div 
+          className="cozy-card p-5 sm:p-7 space-y-5 relative overflow-hidden"
+          onTouchStart={(e) => {
+            const touch = e.touches[0];
+            touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+          }}
+          onTouchEnd={(e) => {
+            if (!touchStartPosRef.current) return;
+            const touch = e.changedTouches[0];
+            const diffX = touch.clientX - touchStartPosRef.current.x;
+            const diffY = touch.clientY - touchStartPosRef.current.y;
+            touchStartPosRef.current = null;
+            // Horizontal swipe detection (> 50px)
+            if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
+              if (diffX < 0 && activeCategoryIndex < PREFERENCE_CATEGORIES.length - 1) {
+                // Swipe left -> Next
+                triggerHaptic('medium');
+                setActiveCategoryIndex(prev => prev + 1);
+              } else if (diffX > 0 && activeCategoryIndex > 0) {
+                // Swipe right -> Prev
+                triggerHaptic('medium');
+                setActiveCategoryIndex(prev => prev - 1);
+              }
+            }
+          }}
+        >
+          {/* Top Washi Tape Accent */}
+          <div className="flex justify-center -mt-6 sm:-mt-8 mb-1">
+            <WashiTape color="coral" rotation={-1.5} width="w-28 sm:w-36" />
           </div>
 
-          <div className="flex flex-wrap gap-2.5">
-            {FOOD_AND_ACTIVITY_TAGS.map((tag) => {
-              const isSelected = selectedTags.includes(tag.id);
-              return (
-                <button
-                  key={tag.id}
-                  type="button"
-                  id={`btn-pref-${tag.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
-                  onClick={() => toggleTag(tag.id)}
-                  className={`text-xs font-black px-4 py-2 rounded-full border transition-all duration-150 flex items-center gap-1.5 cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 ${
-                    isSelected
-                      ? `${tag.color} shadow-xs ring-2 ring-[#FF7A59]/40 font-black`
-                      : 'bg-white text-stone-600 border-stone-200/90 hover:bg-[#F7F1E6]'
-                  }`}
-                >
-                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                  <span>{tag.label}</span>
-                  {tag.star && <Star className="w-3.5 h-3.5 fill-[#E5B80B] text-[#E5B80B]" />}
-                </button>
-              );
-            })}
+          {/* Section Header & DNA Counts */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-stone-200/80">
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-[#3E3025] tracking-wider uppercase flex items-center gap-2">
+                <span className="text-[#FF7A59]">✦</span>
+                <span>TRAVEL DNA PREFERENCES</span>
+              </h3>
+              <p className="text-[11px] text-stone-500 font-medium mt-0.5">
+                Organized by category • Double-tap for <strong className="text-[#B8860B]">Must-Have (⭐)</strong> • Long-press to <strong className="text-[#C53030]">Filter Out (✕)</strong>
+              </p>
+            </div>
+
+            {/* Selection Tally */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(() => {
+                const mustHavesCount = Object.values(tagStates).filter(s => s === 'must-have').length;
+                const selectedCount = Object.values(tagStates).filter(s => s === 'selected').length;
+                const avoidCount = Object.values(tagStates).filter(s => s === 'avoid').length;
+
+                return (
+                  <>
+                    {mustHavesCount > 0 && (
+                      <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] flex items-center gap-1 shadow-2xs">
+                        <Star className="w-3 h-3 fill-[#F59E0B] text-[#F59E0B]" />
+                        {mustHavesCount} Must-Have
+                      </span>
+                    )}
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-[#F3EFE6] text-[#4A3E35] border border-stone-200">
+                      {selectedCount + mustHavesCount} active
+                    </span>
+                    {avoidCount > 0 && (
+                      <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA] flex items-center gap-1 shadow-2xs">
+                        <X className="w-3 h-3 text-[#DC2626] stroke-[3]" />
+                        {avoidCount} Avoided
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
+
+          {/* Interactive Gesture Guide Hint Banner */}
+          <div className="bg-[#FAF7F0] border border-[#EADBCE] rounded-xl p-2.5 flex items-center justify-between text-[11px] text-[#5A4A3E]">
+            <div className="flex items-center gap-2">
+              <Info className="w-3.5 h-3.5 text-[#FF7A59] shrink-0" />
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-stone-400"></span> Tap: <strong>Select</strong></span>
+                <span className="text-stone-300">•</span>
+                <span className="flex items-center gap-1 text-[#92400E]"><Star className="w-2.5 h-2.5 fill-[#F59E0B] text-[#F59E0B]" /> Double-Tap or ⭐: <strong>Must-Have</strong></span>
+                <span className="text-stone-300">•</span>
+                <span className="flex items-center gap-1 text-[#991B1B]"><X className="w-2.5 h-2.5 text-[#DC2626] stroke-[3]" /> Long-Press or ✕: <strong>Filter Out</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progressive Disclosure: Category Tabs Carousel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              {/* Category Carousel Switcher Tabs */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-1 overflow-x-auto no-scrollbar py-1">
+                {PREFERENCE_CATEGORIES.map((cat, idx) => {
+                  const isActive = activeCategoryIndex === idx;
+                  
+                  // Count selections in this category
+                  const catTags = PREFERENCE_TAGS.filter(t => t.category === cat.id);
+                  const activeInCat = catTags.filter(t => {
+                    const st = tagStates[t.id];
+                    return st === 'selected' || st === 'must-have';
+                  }).length;
+                  const avoidInCat = catTags.filter(t => tagStates[t.id] === 'avoid').length;
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      id={`tab-category-${cat.id}`}
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setActiveCategoryIndex(idx);
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer transform ${
+                        isActive
+                          ? `${cat.activeTabClass} scale-102 ring-2 ring-stone-800/10`
+                          : 'bg-white text-stone-600 border border-stone-200 hover:bg-[#F8F4EB]'
+                      }`}
+                    >
+                      <span className="text-sm">{cat.iconEmoji}</span>
+                      <span>{cat.shortTitle}</span>
+                      
+                      {activeInCat > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                          isActive ? 'bg-white/30 text-white' : 'bg-stone-200 text-stone-700'
+                        }`}>
+                          {activeInCat}
+                        </span>
+                      )}
+
+                      {avoidInCat > 0 && (
+                        <span className={`text-[9px] px-1 rounded-full font-black ${
+                          isActive ? 'bg-red-900/40 text-red-100' : 'bg-red-100 text-red-700'
+                        }`}>
+                          ✕{avoidInCat}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Carousel Arrow Controls */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  id="btn-cat-carousel-prev"
+                  disabled={activeCategoryIndex === 0}
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setActiveCategoryIndex(prev => Math.max(0, prev - 1));
+                  }}
+                  className="w-7 h-7 rounded-lg bg-white border border-stone-200 hover:bg-stone-50 flex items-center justify-center text-stone-600 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-2xs"
+                  title="Previous Category"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  id="btn-cat-carousel-next"
+                  disabled={activeCategoryIndex === PREFERENCE_CATEGORIES.length - 1}
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setActiveCategoryIndex(prev => Math.min(PREFERENCE_CATEGORIES.length - 1, prev + 1));
+                  }}
+                  className="w-7 h-7 rounded-lg bg-white border border-stone-200 hover:bg-stone-50 flex items-center justify-center text-stone-600 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-2xs"
+                  title="Next Category"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Active Category Description Note */}
+            {(() => {
+              const currentCat = PREFERENCE_CATEGORIES[activeCategoryIndex];
+              return (
+                <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${currentCat.colorTheme}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{currentCat.iconEmoji}</span>
+                    <span className="font-semibold">{currentCat.description}</span>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-wider shrink-0 opacity-75">
+                    Step {activeCategoryIndex + 1} of {PREFERENCE_CATEGORIES.length}
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Tag Grid for Active Category with Double-Tap & Long-Press micro-interactions */}
+          <div className="min-h-[140px] flex flex-wrap gap-2.5 items-start pt-1">
+            {(() => {
+              const currentCategory = PREFERENCE_CATEGORIES[activeCategoryIndex];
+              const categoryTags = PREFERENCE_TAGS.filter(t => t.category === currentCategory.id);
+
+              return categoryTags.map((tag) => {
+                const status = tagStates[tag.id] || 'none';
+                const isSelected = status === 'selected';
+                const isMustHave = status === 'must-have';
+                const isAvoid = status === 'avoid';
+
+                return (
+                  <div
+                    key={tag.id}
+                    className="relative group inline-flex"
+                  >
+                    <button
+                      type="button"
+                      id={`btn-pref-tag-${tag.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                      onPointerDown={() => handleTagPointerDown(tag.id)}
+                      onPointerUp={() => handleTagPointerUp(tag.id)}
+                      onPointerCancel={handleTagPointerCancel}
+                      onDoubleClick={() => handleSetMustHave(tag.id)}
+                      title={`${tag.label}: ${tag.description}\n(Double-click/tap for Must-Have, Long-press for Avoid)`}
+                      className={`text-xs font-black px-3.5 py-2.5 rounded-2xl border transition-all duration-200 flex items-center gap-2 cursor-pointer select-none transform hover:-translate-y-0.5 active:translate-y-0 ${
+                        isMustHave
+                          ? 'bg-[#FEF3C7] text-[#92400E] border-[#F59E0B] shadow-sm ring-2 ring-[#F59E0B]/50 font-black'
+                          : isAvoid
+                          ? 'bg-[#FEE2E2] text-[#991B1B] border-[#EF4444] line-through opacity-85 shadow-2xs'
+                          : isSelected
+                          ? `${tag.color} shadow-xs ring-2 ring-[#FF7A59]/40 font-black`
+                          : 'bg-white text-stone-700 border-stone-200/90 hover:bg-[#FAF5EC] hover:border-stone-300'
+                      }`}
+                    >
+                      {/* Left icon status */}
+                      <span className="text-sm shrink-0">{tag.iconEmoji}</span>
+
+                      {/* Tag Label */}
+                      <span className={`${isAvoid ? 'line-through text-red-800' : ''}`}>
+                        {tag.label}
+                      </span>
+
+                      {/* Must-Have Badge or Checkmark */}
+                      {isMustHave && (
+                        <span className="flex items-center gap-0.5 bg-[#F59E0B] text-white text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider shadow-2xs">
+                          <Star className="w-2.5 h-2.5 fill-white text-white" />
+                          MUST-HAVE
+                        </span>
+                      )}
+
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 stroke-[3] text-stone-800" />
+                      )}
+
+                      {isAvoid && (
+                        <span className="flex items-center gap-0.5 bg-[#DC2626] text-white text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider shadow-2xs">
+                          <X className="w-2.5 h-2.5 stroke-[3]" />
+                          AVOID
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Quick Micro-Action Buttons for desktop / direct touch accessibility */}
+                    <div className="absolute -top-2 -right-2 hidden group-hover:flex items-center gap-0.5 z-10 bg-white/95 rounded-full p-0.5 shadow-md border border-stone-200">
+                      {/* Must-Have Toggle Button */}
+                      <button
+                        type="button"
+                        id={`btn-musthave-${tag.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                        onClick={(e) => handleSetMustHave(tag.id, e)}
+                        title={isMustHave ? "Remove Must-Have priority" : "Mark as MUST-HAVE priority (⭐)"}
+                        className={`w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all ${
+                          isMustHave
+                            ? 'bg-[#F59E0B] text-white'
+                            : 'bg-stone-100 hover:bg-[#FEF3C7] text-stone-600 hover:text-[#92400E]'
+                        }`}
+                      >
+                        <Star className={`w-3 h-3 ${isMustHave ? 'fill-white' : ''}`} />
+                      </button>
+
+                      {/* Avoid Filter-Out Toggle Button */}
+                      <button
+                        type="button"
+                        id={`btn-avoid-${tag.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                        onClick={(e) => handleSetAvoid(tag.id, e)}
+                        title={isAvoid ? "Remove Avoid filter" : "Filter out / strictly avoid this (✕)"}
+                        className={`w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all ${
+                          isAvoid
+                            ? 'bg-[#DC2626] text-white'
+                            : 'bg-stone-100 hover:bg-[#FEE2E2] text-stone-600 hover:text-[#991B1B]'
+                        }`}
+                      >
+                        <X className="w-3 h-3 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          {/* Carousel Footer: Stepper Progress & Next Category Navigation */}
+          <div className="pt-3 border-t border-stone-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+            {/* Step Dots */}
+            <div className="flex items-center gap-1.5">
+              {PREFERENCE_CATEGORIES.map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setActiveCategoryIndex(idx);
+                  }}
+                  className={`h-2 rounded-full transition-all cursor-pointer ${
+                    activeCategoryIndex === idx 
+                      ? 'w-6 bg-[#FF7A59]' 
+                      : 'w-2 bg-stone-300 hover:bg-stone-400'
+                  }`}
+                  title={`Go to category ${idx + 1}`}
+                />
+              ))}
+              <span className="text-[11px] text-stone-400 font-bold ml-1">
+                Category {activeCategoryIndex + 1} of {PREFERENCE_CATEGORIES.length}
+              </span>
+            </div>
+
+            {/* Next / Previous Action Buttons */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              {activeCategoryIndex > 0 && (
+                <button
+                  type="button"
+                  id="btn-cat-prev-bottom"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setActiveCategoryIndex(prev => prev - 1);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Previous</span>
+                </button>
+              )}
+
+              {activeCategoryIndex < PREFERENCE_CATEGORIES.length - 1 ? (
+                <button
+                  type="button"
+                  id="btn-cat-next-bottom"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setActiveCategoryIndex(prev => prev + 1);
+                  }}
+                  className="px-4 py-1.5 rounded-xl bg-[#FF7A59] hover:bg-[#E96645] text-white text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <span>Next: {PREFERENCE_CATEGORIES[activeCategoryIndex + 1].shortTitle}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <div className="px-3 py-1.5 rounded-xl bg-[#D7EED9] border border-[#B8DEC0] text-[#285A34] text-xs font-black flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>All Categories Reviewed</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Must-Have Summary Tray across all categories */}
+          {(() => {
+            const mustHaves = Object.entries(tagStates).filter(([_, s]) => s === 'must-have').map(([id]) => id);
+            if (mustHaves.length === 0) return null;
+
+            return (
+              <div className="p-3 bg-[#FEFBF2] border border-[#FDE68A] rounded-xl space-y-1.5">
+                <div className="text-[11px] font-black text-[#92400E] flex items-center gap-1.5 uppercase tracking-wider">
+                  <Star className="w-3.5 h-3.5 fill-[#F59E0B] text-[#F59E0B]" />
+                  <span>High-Priority Must-Have Experiences (⭐):</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {mustHaves.map(id => {
+                    const tag = PREFERENCE_TAGS.find(t => t.id === id);
+                    return (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-lg bg-[#FEF3C7] text-[#92400E] border border-[#FCD34D]"
+                      >
+                        <span>{tag?.iconEmoji || '⭐'}</span>
+                        <span>{id}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSetMustHave(id, e)}
+                          title="Remove Must-Have"
+                          className="hover:text-stone-900 cursor-pointer ml-0.5"
+                        >
+                          <X className="w-3 h-3 stroke-[2.5]" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Strictly Avoided / Filtered Out Summary Tray */}
+          {(() => {
+            const avoids = Object.entries(tagStates).filter(([_, s]) => s === 'avoid').map(([id]) => id);
+            if (avoids.length === 0) return null;
+
+            return (
+              <div className="p-3 bg-[#FFF5F5] border border-[#FECACA] rounded-xl space-y-1.5">
+                <div className="text-[11px] font-black text-[#991B1B] flex items-center gap-1.5 uppercase tracking-wider">
+                  <AlertCircle className="w-3.5 h-3.5 text-[#DC2626]" />
+                  <span>Strictly Filtered Out & Avoided by AI (✕):</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {avoids.map(id => {
+                    const tag = PREFERENCE_TAGS.find(t => t.id === id);
+                    return (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-lg bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5]"
+                      >
+                        <span>{tag?.iconEmoji || '🚫'}</span>
+                        <span className="line-through">{id}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSetAvoid(id, e)}
+                          title="Remove Avoid filter"
+                          className="hover:text-stone-900 cursor-pointer ml-0.5"
+                        >
+                          <X className="w-3 h-3 stroke-[2.5]" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 9. "NOTES" SPECIAL REQUIREMENTS TEXTAREA */}

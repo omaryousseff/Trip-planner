@@ -15,7 +15,8 @@ import {
   Sparkles, 
   Link as LinkIcon,
   Layers,
-  Building2
+  Building2,
+  Camera
 } from 'lucide-react';
 import { ScheduleItem } from '../types';
 import { getDirectionsUrl, getPlaceSearchUrl, getAppleMapsUrl } from '../utils/geoCoordinates';
@@ -51,16 +52,38 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
 }) => {
   if (!item || !photoInfo) return null;
 
-  // Multi-photo options: combine primary photo with alternative photos
-  const allPhotos: AlternativePhoto[] = [
-    {
+  // Multi-photo options: combine primary photo with up to 3 best photos
+  const rawList: AlternativePhoto[] = [];
+  if (photoInfo.url) {
+    rawList.push({
       url: photoInfo.url,
       caption: photoInfo.caption || item.title,
-      source: photoInfo.source || 'Official Website & Verified Archive',
-      sourceType: photoInfo.sourceType || 'official_website',
-    },
-    ...(photoInfo.alternativePhotos || []).filter((p) => p.url !== photoInfo.url)
-  ];
+      source: photoInfo.source || 'Pinterest',
+      sourceType: photoInfo.sourceType || 'pinterest',
+      pinUrl: photoInfo.officialWebsiteUrl,
+    });
+  }
+  if (photoInfo.photos && photoInfo.photos.length > 0) {
+    photoInfo.photos.forEach((u, idx) => {
+      if (u && !rawList.some((p) => p.url === u)) {
+        rawList.push({
+          url: u,
+          caption: `${item.title} - Perspective ${idx + 1}`,
+          source: 'Pinterest',
+          sourceType: 'pinterest',
+          pinUrl: photoInfo.officialWebsiteUrl,
+        });
+      }
+    });
+  }
+  if (photoInfo.alternativePhotos) {
+    photoInfo.alternativePhotos.forEach((alt, idx) => {
+      if (alt.url && !rawList.some((p) => p.url === alt.url)) {
+        rawList.push(alt);
+      }
+    });
+  }
+  const allPhotos = rawList.slice(0, 3);
 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const currentPhoto = allPhotos[selectedPhotoIndex] || allPhotos[0];
@@ -226,6 +249,7 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
               <div className="bg-black/75 backdrop-blur-md p-1 rounded-2xl flex items-center gap-1 border border-white/20 shadow-xl">
                 {allPhotos.map((photo, pIdx) => {
                   const isSelected = selectedPhotoIndex === pIdx;
+                  const isPinterest = (photo.source || '').toLowerCase().includes('pinterest') || photo.sourceType === 'pinterest';
                   const isTA = (photo.source || '').toLowerCase().includes('tripadvisor');
                   return (
                     <button
@@ -237,12 +261,18 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
                       }}
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-[#FF7A59] text-white shadow-xs'
+                          ? 'bg-[#E60023] text-white shadow-xs'
                           : 'text-white/80 hover:text-white hover:bg-white/20'
                       }`}
                     >
-                      {isTA ? <Star className="w-3 h-3 text-[#FFE17D]" /> : <Building2 className="w-3 h-3 text-[#4ECDC4]" />}
-                      <span>{isTA ? 'TripAdvisor Photo' : 'Official Site Photo'}</span>
+                      {isPinterest ? (
+                        <Camera className="w-3 h-3 text-[#FFD93D]" />
+                      ) : isTA ? (
+                        <Star className="w-3 h-3 text-[#FFE17D]" />
+                      ) : (
+                        <Building2 className="w-3 h-3 text-[#4ECDC4]" />
+                      )}
+                      <span>{isPinterest ? `Pinterest Photo ${pIdx + 1}` : isTA ? 'TripAdvisor Photo' : 'Official Site Photo'}</span>
                     </button>
                   );
                 })}
@@ -281,6 +311,18 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
 
             {/* Direct Verification Links */}
             <div className="flex items-center gap-2 shrink-0">
+              <a
+                href={currentPhoto.pinUrl || `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(`${item.title} ${destination}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 bg-[#E60023] hover:bg-[#c9001f] text-white font-bold text-xs px-3 py-2 rounded-xl shadow-2xs transition-all"
+                title="Search aesthetic travel photos on Pinterest"
+              >
+                <Camera className="w-3.5 h-3.5 text-white" />
+                <span>Pinterest</span>
+                <ExternalLink className="w-3 h-3 text-white/80" />
+              </a>
+
               {officialWebsiteUrl && (
                 <a
                   href={officialWebsiteUrl}

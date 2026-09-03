@@ -23,13 +23,14 @@ export interface Coordinates {
   lng: number;
 }
 
-export type PhotoSourceType = 'official_website' | 'tripadvisor' | 'heritage_archive' | 'tourism_board';
+export type PhotoSourceType = 'pinterest' | 'official_website' | 'tripadvisor' | 'heritage_archive' | 'tourism_board';
 
 export interface AlternativePhoto {
   url: string;
   source: string;
   caption: string;
   sourceType?: PhotoSourceType;
+  pinUrl?: string;
 }
 
 export interface ScheduleItem {
@@ -45,6 +46,7 @@ export interface ScheduleItem {
   tips?: string;
   coordinates?: Coordinates;
   imageUrl?: string;
+  photos?: string[]; // The best 3 photos of the place from Pinterest
   photoCaption?: string;
   photoSource?: string;
   photoSourceType?: PhotoSourceType;
@@ -115,4 +117,60 @@ export interface TripPreferences {
   dietary: string[];
   interests: string[];
   specialRequirements: string;
+  mustHaveInterests?: string[];
+  avoidInterests?: string[];
+}
+
+export type NavigationTab = 'home' | 'map' | 'plan' | 'journal' | 'profile';
+
+export interface TravelArchetype {
+  id: string;
+  title: string;
+  tagline: string;
+  badge: string;
+  description: string;
+  quote: string;
+  dominantTraits: string[];
+  color: string;
+  stampBg: string;
+}
+
+export interface TravelDNA {
+  archetype: TravelArchetype;
+  sensoryScores: {
+    curiosity: number; // 0-100
+    culinary: number;
+    culture: number;
+    relaxation: number;
+    spontaneity: number;
+  };
+  preferredRhythm: 'gentle' | 'balanced' | 'fast';
+  passions: string[];
+  collectedStampsCount: number;
+}
+
+export interface JournalMemory {
+  id: string;
+  dayIndex: number;
+  itemId?: string;
+  title: string;
+  location: string;
+  date: string;
+  photoUrl?: string;
+  caption?: string;
+  userNote?: string;
+  stampCity?: string;
+  stampColor?: string;
+  weatherEmoji?: string;
+  washiStyle?: 'coral' | 'mint' | 'gold';
+  rotation?: number;
+}
+
+export interface CompassSuggestion {
+  id: string;
+  type: 'weather' | 'route' | 'golden_hour' | 'tip' | 'photo';
+  title: string;
+  message: string;
+  actionText?: string;
+  actionType?: 'switch_items' | 'navigate' | 'view_photo' | 'dismiss';
 }

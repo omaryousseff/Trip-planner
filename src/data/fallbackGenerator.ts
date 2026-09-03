@@ -40,17 +40,48 @@ export function generateFallbackTripPlan(preferences: TripPreferences): TripPlan
     plan = createGenericCustomPlan(preferences);
   }
 
-  // Ensure every schedule item has verified coordinates and landmark photography
+  // Ensure every schedule item has verified coordinates and landmark photography,
+  // and respects mustHaveInterests and avoidInterests
   if (plan && plan.days) {
+    const avoidKeywords = (preferences.avoidInterests || []).map(a => a.toLowerCase());
+    const mustHaveKeywords = (preferences.mustHaveInterests || []).map(m => m.toLowerCase());
+
     plan.days.forEach((d) => {
+      // Filter out or adapt schedule items that conflict with avoidInterests
+      d.schedule = d.schedule.filter((item) => {
+        const text = `${item.title} ${item.description} ${item.category}`.toLowerCase();
+        for (const avoid of avoidKeywords) {
+          if (avoid.includes('sport') && (text.includes('stadium') || text.includes('arena') || text.includes('match') || text.includes('game'))) {
+            return false;
+          }
+          if (avoid.includes('nightlife') && (text.includes('club') || text.includes('dj') || text.includes('dance floor'))) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      // Highlight Must-Have matches
       d.schedule.forEach((item, idx) => {
+        const text = `${item.title} ${item.description}`.toLowerCase();
+        const isMustHaveMatch = mustHaveKeywords.some(kw => {
+          const words = kw.split(' ').filter(w => w.length > 3);
+          return words.some(w => text.includes(w));
+        });
+
+        if (isMustHaveMatch && !item.tips.includes('⭐')) {
+          item.tips = `⭐ Must-Have Match: ${item.tips}`;
+        }
+
         item.coordinates = resolvePlaceCoordinates(item, plan.destination, idx);
         const photo = getLandmarkPhoto(item, plan.destination);
         item.imageUrl = photo.url;
         item.photoCaption = photo.caption;
         item.photoSource = photo.source;
+        item.photoSourceType = photo.sourceType;
         item.officialWebsiteUrl = photo.officialWebsiteUrl;
         item.tripAdvisorUrl = photo.tripAdvisorUrl;
+        item.photos = photo.photos;
         item.alternativePhotos = photo.alternativePhotos;
       });
     });
