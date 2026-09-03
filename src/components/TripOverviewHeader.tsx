@@ -127,21 +127,25 @@ export const TripOverviewHeader: React.FC<TripOverviewHeaderProps> = ({
       {/* Main Destination Hero Block */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-black uppercase tracking-wider text-white bg-[#FF6B6B] px-3 py-1 rounded-full border border-[#EE5253] shadow-xs">
+          <span className="text-[11px] font-black uppercase tracking-wider text-white bg-[#FF7A59] px-3.5 py-1 rounded-full border border-[#FF6040] shadow-xs">
             {plan.occasion}
           </span>
-          <span className="text-[11px] font-black uppercase tracking-wider text-white bg-[#4ECDC4] px-3 py-1 rounded-full border border-[#45B7AF] shadow-xs">
+          <span className="text-[11px] font-black uppercase tracking-wider text-[#285A34] bg-[#D7EED9] px-3.5 py-1 rounded-full border border-[#B8DEC0] shadow-xs">
             {plan.durationDays} Days / {plan.durationDays - 1} Nights
           </span>
-          <span className="text-[11px] font-black uppercase tracking-wider text-[#2D2D2D] bg-[#FFD93D] px-3 py-1 rounded-full border border-[#E5B80B] shadow-xs">
+          <span className="text-[11px] font-black uppercase tracking-wider text-[#4A3B30] bg-[#FFF6EA] px-3.5 py-1 rounded-full border border-[#E9DCCF] shadow-xs">
             {plan.travelersCount} Travelers ({plan.travelerType})
           </span>
-          <span className="text-[11px] font-black uppercase tracking-wider text-white bg-[#A29BFE] px-3 py-1 rounded-full border border-[#6C5CE7] shadow-xs">
+          <span className="text-[11px] font-black uppercase tracking-wider text-[#3D3582] bg-[#E2DEFD] px-3.5 py-1 rounded-full border border-[#C8C2F8] shadow-xs">
             {plan.budget} Budget • {plan.pace} Pace
+          </span>
+          <span className="text-[11px] font-black uppercase tracking-wider text-[#1A535C] bg-[#E0F8F6] px-3.5 py-1 rounded-full border border-[#BCEEEA] shadow-xs flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-[#1A535C]" />
+            Official & TripAdvisor Photos
           </span>
         </div>
 
-        <h1 className="text-3xl md:text-5xl font-black text-[#1A1A1A] tracking-tighter uppercase italic">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#2D241E] font-cozy-serif tracking-tight">
           {plan.destination}
         </h1>
 

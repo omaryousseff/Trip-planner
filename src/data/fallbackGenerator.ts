@@ -1,13 +1,16 @@
 import { TripPlan, TripPreferences, DayPlan, ScheduleItem, CategoryType } from '../types';
 import { SAMPLE_TRIPS } from './sampleTrips';
+import { resolvePlaceCoordinates } from '../utils/geoCoordinates';
+import { getLandmarkPhoto } from '../utils/landmarkImages';
 
 export function generateFallbackTripPlan(preferences: TripPreferences): TripPlan {
   const destLower = preferences.destination.toLowerCase();
+  let plan: TripPlan;
 
   // 1. Check if we match Tokyo
   if (destLower.includes('tokyo') || destLower.includes('japan')) {
     const baseTokyo = SAMPLE_TRIPS[0];
-    return {
+    plan = {
       ...baseTokyo,
       destination: preferences.destination,
       occasion: preferences.occasion || baseTokyo.occasion,
@@ -20,35 +23,40 @@ export function generateFallbackTripPlan(preferences: TripPreferences): TripPlan
       quotaExceeded: true,
       quotaNotice: `Your Gemini API key quota was exceeded (HTTP 429). We've generated a complete, personalized itinerary for ${preferences.destination} so you can continue your travel planning without interruption.`,
     };
+  } else if (destLower.includes('paris') || destLower.includes('france')) {
+    plan = createParisPlan(preferences);
+  } else if (destLower.includes('rome') || destLower.includes('italy') || destLower.includes('roma')) {
+    plan = createRomePlan(preferences);
+  } else if (destLower.includes('barcelona') || destLower.includes('spain')) {
+    plan = createBarcelonaPlan(preferences);
+  } else if (destLower.includes('new york') || destLower.includes('nyc') || destLower.includes('manhattan')) {
+    plan = createNycPlan(preferences);
+  } else if (destLower.includes('kyoto')) {
+    plan = createKyotoPlan(preferences);
+  } else if (destLower.includes('london') || destLower.includes('uk') || destLower.includes('england')) {
+    plan = createLondonPlan(preferences);
+  } else {
+    // 3. Generic procedural generator for ANY destination
+    plan = createGenericCustomPlan(preferences);
   }
 
-  // 2. Pre-curated destinations
-  if (destLower.includes('paris') || destLower.includes('france')) {
-    return createParisPlan(preferences);
+  // Ensure every schedule item has verified coordinates and landmark photography
+  if (plan && plan.days) {
+    plan.days.forEach((d) => {
+      d.schedule.forEach((item, idx) => {
+        item.coordinates = resolvePlaceCoordinates(item, plan.destination, idx);
+        const photo = getLandmarkPhoto(item, plan.destination);
+        item.imageUrl = photo.url;
+        item.photoCaption = photo.caption;
+        item.photoSource = photo.source;
+        item.officialWebsiteUrl = photo.officialWebsiteUrl;
+        item.tripAdvisorUrl = photo.tripAdvisorUrl;
+        item.alternativePhotos = photo.alternativePhotos;
+      });
+    });
   }
 
-  if (destLower.includes('rome') || destLower.includes('italy') || destLower.includes('roma')) {
-    return createRomePlan(preferences);
-  }
-
-  if (destLower.includes('barcelona') || destLower.includes('spain')) {
-    return createBarcelonaPlan(preferences);
-  }
-
-  if (destLower.includes('new york') || destLower.includes('nyc') || destLower.includes('manhattan')) {
-    return createNycPlan(preferences);
-  }
-
-  if (destLower.includes('kyoto')) {
-    return createKyotoPlan(preferences);
-  }
-
-  if (destLower.includes('london') || destLower.includes('uk') || destLower.includes('england')) {
-    return createLondonPlan(preferences);
-  }
-
-  // 3. Generic procedural generator for ANY destination
-  return createGenericCustomPlan(preferences);
+  return plan;
 }
 
 function createParisPlan(pref: TripPreferences): TripPlan {

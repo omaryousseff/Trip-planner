@@ -2,10 +2,33 @@
 
 @layer base {
   body {
-    background-color: #FFF8F0;
-    color: #2D2D2D;
+    background-color: #FBF6EE;
+    color: #2D2723;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
+}
+
+.font-cozy-serif {
+  font-family: 'Fraunces', 'Playfair Display', Georgia, serif;
+}
+
+/* Stitched badge styling matching HAND-CRAFTED SCHEDULING */
+.stitched-badge {
+  border: 1.5px dashed #CBB89D;
+  background-color: #FFFDF9;
+}
+
+/* Cozy Warm Card */
+.cozy-card {
+  background-color: #FAF4EA;
+  border-radius: 2rem;
+  border: 1px solid #EFE5D8;
+  box-shadow: 0 4px 12px -2px rgba(90, 70, 50, 0.04);
+}
+
+.cozy-pill-inset {
+  background-color: #F3ECE0;
+  box-shadow: inset 0 2px 4px rgba(60, 45, 30, 0.06);
 }
 
 /* Vibrant Palette Custom Theme Accents */

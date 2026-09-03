@@ -23,6 +23,15 @@ export interface Coordinates {
   lng: number;
 }
 
+export type PhotoSourceType = 'official_website' | 'tripadvisor' | 'heritage_archive' | 'tourism_board';
+
+export interface AlternativePhoto {
+  url: string;
+  source: string;
+  caption: string;
+  sourceType?: PhotoSourceType;
+}
+
 export interface ScheduleItem {
   id: string;
   time: string;
@@ -35,6 +44,14 @@ export interface ScheduleItem {
   costEstimate?: string;
   tips?: string;
   coordinates?: Coordinates;
+  imageUrl?: string;
+  photoCaption?: string;
+  photoSource?: string;
+  photoSourceType?: PhotoSourceType;
+  officialWebsiteUrl?: string;
+  tripAdvisorUrl?: string;
+  alternativePhotos?: AlternativePhoto[];
+  googleMapsUrl?: string;
   transportDetail?: TransportDetail;
   foodDetail?: FoodDetail;
   completed?: boolean;

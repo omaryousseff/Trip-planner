@@ -23,8 +23,15 @@ import {
   Bus,
   Car,
   Ship,
-  Sparkles
+  Sparkles,
+  Maximize2,
+  Image as ImageIcon,
+  Building2,
+  Star
 } from 'lucide-react';
+import { getLandmarkPhoto, LandmarkPhotoInfo } from '../utils/landmarkImages';
+import { getDirectionsUrl, getPlaceSearchUrl, resolvePlaceCoordinates } from '../utils/geoCoordinates';
+import { PhotoLightboxModal } from './PhotoLightboxModal';
 
 interface ScheduleViewProps {
   days: DayPlan[];
@@ -34,6 +41,18 @@ interface ScheduleViewProps {
   onToggleComplete: (dayIndex: number, itemId: string) => void;
   onRegenerateItem: (dayIndex: number, item: ScheduleItem) => void;
   regeneratingItemId: string | null;
+  onUpdateItemPhoto?: (
+    dayIndex: number, 
+    itemId: string, 
+    newPhoto: { 
+      url: string; 
+      caption?: string; 
+      source: string; 
+      sourceType?: string;
+      officialWebsiteUrl?: string;
+      tripAdvisorUrl?: string;
+    }
+  ) => void;
 }
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({
@@ -44,8 +63,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   onToggleComplete,
   onRegenerateItem,
   regeneratingItemId,
+  onUpdateItemPhoto,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<'all' | CategoryType>('all');
+  const [selectedPhotoModal, setSelectedPhotoModal] = useState<{
+    item: ScheduleItem;
+    photoInfo: LandmarkPhotoInfo;
+  } | null>(null);
 
   const currentDay = days[activeDayIndex] || days[0];
 
@@ -237,39 +261,156 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       </div>
 
       {/* Timeline Schedule Items List */}
-      <div className="space-y-4">
+      <div className="space-y-5">
         {filteredSchedule.map((item, index) => {
           const catConfig = getCategoryConfig(item.category);
           const CategoryIcon = catConfig.icon;
           const isRegenerating = regeneratingItemId === item.id;
-          const mapQuery = encodeURIComponent(`${item.title} ${item.location} ${destination}`);
-          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
+          const photoInfo = getLandmarkPhoto(item, destination);
+          const resolvedCoords = resolvePlaceCoordinates(item, destination, index);
+          
+          const effectivePhotoUrl = item.imageUrl || photoInfo.url;
+          const effectiveCaption = item.photoCaption || photoInfo.caption;
+          const effectiveSource = item.photoSource || photoInfo.source;
+          const effectiveSourceType = item.photoSourceType || photoInfo.sourceType;
+          const officialWebsiteUrl = item.officialWebsiteUrl || photoInfo.officialWebsiteUrl;
+          const tripAdvisorUrl = item.tripAdvisorUrl || photoInfo.tripAdvisorUrl;
+          const alternativePhotos = item.alternativePhotos || photoInfo.alternativePhotos;
+          const isVerifiedPhoto = !!item.photoSource || photoInfo.isVerifiedLandmark;
+          
+          // Turn-by-turn navigation between stops
+          const previousItem = index > 0 ? filteredSchedule[index - 1] : null;
+
+          const directionsUrl = getDirectionsUrl({
+            destinationTitle: item.title,
+            destinationLocation: item.location,
+            destinationCity: destination,
+            originTitle: previousItem ? previousItem.title : undefined,
+            originLocation: previousItem ? previousItem.location : undefined,
+            travelMode: item.category === 'transport' ? 'transit' : 'walking',
+          });
+
+          const placeSearchUrl = item.googleMapsUrl || getPlaceSearchUrl(item.title, item.location, destination);
 
           return (
             <div
               key={item.id || index}
               id={`schedule-item-${item.id}`}
-              className={`bg-white rounded-[24px] border border-stone-200/80 border-b-4 border-b-stone-200 transition-all duration-200 overflow-hidden ${
+              className={`bg-white rounded-[28px] border border-stone-200/90 shadow-sm transition-all duration-200 overflow-hidden ${
                 item.completed
                   ? 'bg-stone-50/80 opacity-75'
-                  : 'hover:border-stone-300 shadow-sm'
+                  : 'hover:shadow-md'
               }`}
             >
+              {/* Landmark / Place Photo Header Banner */}
+              <div 
+                className="relative w-full h-44 sm:h-52 bg-stone-900 overflow-hidden cursor-pointer group"
+                onClick={() => setSelectedPhotoModal({ 
+                  item, 
+                  photoInfo: { 
+                    url: effectivePhotoUrl, 
+                    caption: effectiveCaption, 
+                    alt: item.title, 
+                    isVerifiedLandmark: isVerifiedPhoto,
+                    source: effectiveSource,
+                    sourceType: effectiveSourceType,
+                    officialWebsiteUrl,
+                    tripAdvisorUrl,
+                    alternativePhotos,
+                  } 
+                })}
+                title="Click to view original photo with stated source"
+              >
+                <img
+                  src={effectivePhotoUrl}
+                  alt={item.title}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+                {/* Stop number badge & Category */}
+                <div className="absolute top-3 left-3 flex items-center gap-2">
+                  <span className="bg-[#FFE17D] text-[#3D291F] font-black text-xs px-3 py-1 rounded-full border border-[#DFB277] shadow-xs">
+                    Stop #{index + 1}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${catConfig.badgeBg} shadow-xs`}>
+                    <CategoryIcon className="w-3.5 h-3.5" />
+                    {catConfig.label}
+                  </span>
+                </div>
+
+                {/* Stated Source Badge (Embedded Original Photo Inside App) */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                  <div 
+                    className="bg-black/75 text-white text-[11px] font-black px-3 py-1 rounded-full backdrop-blur-md flex items-center gap-1.5 border border-white/20 shadow-md"
+                    title={`Original photo source: ${effectiveSource}`}
+                  >
+                    {effectiveSourceType === 'tripadvisor' || effectiveSource.toLowerCase().includes('tripadvisor') ? (
+                      <Star className="w-3 h-3 text-[#00AA6C] fill-[#00AA6C]" />
+                    ) : (
+                      <Building2 className="w-3 h-3 text-[#FFE17D]" />
+                    )}
+                    <span className="max-w-[120px] sm:max-w-[180px] truncate">
+                      {effectiveSource}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPhotoModal({ 
+                        item, 
+                        photoInfo: { 
+                          url: effectivePhotoUrl, 
+                          caption: effectiveCaption, 
+                          alt: item.title, 
+                          isVerifiedLandmark: isVerifiedPhoto,
+                          source: effectiveSource,
+                          sourceType: effectiveSourceType,
+                          officialWebsiteUrl,
+                          tripAdvisorUrl,
+                          alternativePhotos,
+                        } 
+                      });
+                    }}
+                    className="bg-black/60 hover:bg-black text-white text-[11px] font-bold px-2.5 py-1 rounded-full backdrop-blur-md flex items-center gap-1 transition-colors border border-white/20"
+                    title="View original photo details"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">View</span>
+                  </button>
+                </div>
+
+                {/* Photo Caption & Stated Source at bottom of photo banner */}
+                <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-xs text-white/95">
+                  <div className="flex items-center gap-1.5 font-bold truncate">
+                    <ImageIcon className="w-3.5 h-3.5 text-[#FFE17D] shrink-0" />
+                    <span className="truncate">{effectiveCaption}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {alternativePhotos && alternativePhotos.length > 1 && (
+                      <span className="bg-[#FFE17D] text-[#2D241E] font-black text-[10px] px-2 py-0.5 rounded-full shadow-2xs">
+                        {alternativePhotos.length} Photos
+                      </span>
+                    )}
+                    <span className="bg-[#4ECDC4] text-stone-900 font-black text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Original Photo
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div className="p-5 md:p-6">
-                {/* Header: Time, Category Badge, Checkbox, Actions */}
+                {/* Time, Duration & Completion Action */}
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center flex-wrap gap-2">
                     {/* Time badge */}
-                    <div className="inline-flex items-center gap-1.5 text-xs font-black text-[#2D2D2D] bg-[#FFD93D] px-3 py-1 rounded-xl border-b-2 border-[#E5B80B]">
-                      <Clock className="w-3.5 h-3.5 text-[#2D2D2D]" />
+                    <div className="inline-flex items-center gap-1.5 text-xs font-black text-[#2D2D2D] bg-[#FFF8F0] px-3 py-1 rounded-xl border border-stone-300">
+                      <Clock className="w-3.5 h-3.5 text-[#FF6B6B]" />
                       {item.time}
                     </div>
-
-                    {/* Category pill */}
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-xl border ${catConfig.badgeBg}`}>
-                      <CategoryIcon className="w-3.5 h-3.5" />
-                      {catConfig.label}
-                    </span>
 
                     {/* Duration badge */}
                     {item.duration && (
@@ -277,46 +418,49 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         • {item.duration}
                       </span>
                     )}
+
+                    {/* GPS Coordinates pin */}
+                    <span className="text-[11px] text-stone-400 font-mono hidden sm:inline">
+                      ({resolvedCoords.lat.toFixed(4)}, {resolvedCoords.lng.toFixed(4)})
+                    </span>
                   </div>
 
-                  {/* Right side: Checkbox toggle */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      id={`btn-complete-${item.id}`}
-                      onClick={() => onToggleComplete(activeDayIndex, item.id)}
-                      title={item.completed ? 'Mark as incomplete' : 'Mark as completed'}
-                      className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl transition-all ${
-                        item.completed
-                          ? 'bg-[#E0F9F7] text-[#009688] border border-[#4ECDC4]/50'
-                          : 'bg-[#FFF8F0] text-stone-700 hover:bg-[#FFE8D6] border border-stone-200'
-                      }`}
-                    >
-                      {item.completed ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 text-[#009688]" />
-                          <span>Done</span>
-                        </>
-                      ) : (
-                        <>
-                          <Circle className="w-4 h-4 text-stone-400" />
-                          <span>Mark done</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  {/* Checkbox toggle */}
+                  <button
+                    type="button"
+                    id={`btn-complete-${item.id}`}
+                    onClick={() => onToggleComplete(activeDayIndex, item.id)}
+                    title={item.completed ? 'Mark as incomplete' : 'Mark as completed'}
+                    className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl transition-all ${
+                      item.completed
+                        ? 'bg-[#E0F9F7] text-[#009688] border border-[#4ECDC4]/50'
+                        : 'bg-[#FFF8F0] text-stone-700 hover:bg-[#FFE8D6] border border-stone-200'
+                    }`}
+                  >
+                    {item.completed ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-[#009688]" />
+                        <span>Done</span>
+                      </>
+                    ) : (
+                      <>
+                        <Circle className="w-4 h-4 text-stone-400" />
+                        <span>Mark done</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 {/* Title & Location */}
                 <div className="mb-2">
-                  <h3 className={`text-base md:text-lg font-black ${item.completed ? 'text-stone-400 line-through' : 'text-[#1A1A1A]'}`}>
+                  <h3 className={`text-lg md:text-xl font-black ${item.completed ? 'text-stone-400 line-through' : 'text-[#1A1A1A]'}`}>
                     {item.title}
                   </h3>
 
                   {item.location && (
-                    <div className="flex items-center gap-1.5 text-xs text-stone-500 mt-1 font-medium">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-stone-600 mt-1">
                       <MapPin className="w-3.5 h-3.5 text-[#FF6B6B] shrink-0" />
-                      <span className="truncate">{item.location}</span>
+                      <span className="truncate">{item.location}, {destination}</span>
                     </div>
                   )}
                 </div>
@@ -392,8 +536,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     )}
                   </div>
 
-                  {/* Actions: Swap alternative & Google Maps */}
-                  <div className="flex items-center gap-2">
+                  {/* Actions: Swap alternative, Photo, and Accurate Turn-by-Turn Google Maps */}
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
                       type="button"
                       id={`btn-regen-${item.id}`}
@@ -405,16 +549,28 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                       <span>{isRegenerating ? 'Finding...' : 'Alternative'}</span>
                     </button>
 
+                    {/* Accurate Turn-by-Turn Directions link */}
                     <a
-                      href={mapsUrl}
+                      href={directionsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       id={`link-maps-${item.id}`}
-                      className="inline-flex items-center gap-1 text-xs font-black text-white bg-[#4ECDC4] hover:bg-[#45B7AF] border-b-2 border-[#45B7AF] px-3.5 py-1.5 rounded-xl transition-all shadow-xs active:translate-y-0.5"
+                      className="inline-flex items-center gap-1.5 text-xs font-black text-white bg-[#009688] hover:bg-[#00796b] border-b-2 border-[#00796b] px-3.5 py-1.5 rounded-xl transition-all shadow-xs active:translate-y-0.5"
+                      title={previousItem ? `Get directions from ${previousItem.title} to ${item.title}` : `Get directions to ${item.title}`}
                     >
                       <Navigation className="w-3.5 h-3.5" />
-                      <span>Directions</span>
-                      <ExternalLink className="w-3 h-3 text-white/80" />
+                      <span>{previousItem ? 'Directions from Last Stop' : 'Get Directions'}</span>
+                      <ExternalLink className="w-3 h-3 text-teal-200" />
+                    </a>
+
+                    <a
+                      href={placeSearchUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-stone-500 hover:text-stone-800 bg-stone-50 hover:bg-stone-100 rounded-xl border border-stone-200 transition-colors"
+                      title="View Place on Google Maps"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
                 </div>
@@ -434,6 +590,18 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           );
         })}
       </div>
+
+      {/* Photo Lightbox Modal with Stated Source & Multi-Photo View */}
+      {selectedPhotoModal && (
+        <PhotoLightboxModal
+          item={selectedPhotoModal.item}
+          photoInfo={selectedPhotoModal.photoInfo}
+          destination={destination}
+          dayIndex={activeDayIndex}
+          onClose={() => setSelectedPhotoModal(null)}
+          onUpdatePhoto={onUpdateItemPhoto}
+        />
+      )}
     </div>
   );
 };
