@@ -19,6 +19,8 @@ export function generateFallbackTripPlan(preferences: TripPreferences): TripPlan
       budget: preferences.budget || baseTokyo.budget,
       pace: preferences.pace || baseTokyo.pace,
       durationDays: preferences.durationDays || 3,
+      startDate: preferences.startDate,
+      endDate: preferences.endDate,
       days: baseTokyo.days.slice(0, preferences.durationDays || 3),
       quotaExceeded: true,
       quotaNotice: `Your Gemini API key quota was exceeded (HTTP 429). We've generated a complete, personalized itinerary for ${preferences.destination} so you can continue your travel planning without interruption.`,
@@ -85,6 +87,13 @@ export function generateFallbackTripPlan(preferences: TripPreferences): TripPlan
         item.alternativePhotos = photo.alternativePhotos;
       });
     });
+  }
+
+  if (preferences.startDate) {
+    plan.startDate = preferences.startDate;
+  }
+  if (preferences.endDate) {
+    plan.endDate = preferences.endDate;
   }
 
   return plan;

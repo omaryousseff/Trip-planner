@@ -5,6 +5,7 @@ export const SAMPLE_TRIPS: TripPlan[] = [
     destination: "Tokyo, Japan",
     occasion: "Friends Getaway",
     durationDays: 3,
+    startDate: "2026-09-04",
     travelersCount: 4,
     travelerType: "Group of Friends",
     budget: "Moderate",

@@ -373,6 +373,17 @@ export default function App() {
     setJournalMemories((prev) => prev.filter((m) => m.id !== id));
   };
 
+  const handleUpdateStartDate = (newStartDate: string) => {
+    if (!tripPlan) return;
+    const updatedPlan = { ...tripPlan, startDate: newStartDate };
+    setTripPlan(updatedPlan);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPlan));
+    } catch {
+      // Ignore
+    }
+  };
+
   const currentDay = tripPlan?.days[activeDayIndex] || tripPlan?.days[0];
 
   // RENDER CONTENT ACCORDING TO NAVIGATION TAB
@@ -504,11 +515,9 @@ export default function App() {
           <TripOverviewHeader
             plan={tripPlan}
             onReset={() => setNavigationTab('home')}
-            onOpenFlutterModal={() => setIsFlutterModalOpen(true)}
-            isMobileDeviceView={isMobileDeviceView}
-            onToggleMobileDeviceView={() => setIsMobileDeviceView(!isMobileDeviceView)}
             isTodayMode={isTodayMode}
             onToggleTodayMode={() => setIsTodayMode(!isTodayMode)}
+            onUpdateStartDate={handleUpdateStartDate}
           />
 
           {/* Scrapbook Schedule View with Drag-and-Drop and Timelines */}
@@ -737,22 +746,6 @@ export default function App() {
             >
               <Sparkles className="w-3.5 h-3.5 text-[#FF7A59]" />
               <span className="hidden sm:inline">Travel DNA</span>
-            </button>
-
-            {/* Flutter & GitHub APK Hub */}
-            <button
-              type="button"
-              id="header-btn-flutter-apk"
-              onClick={() => {
-                triggerHaptic('medium');
-                setIsFlutterModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 text-xs font-black px-3.5 py-1.5 rounded-full bg-stone-900 hover:bg-black text-white shadow-xs transition-colors cursor-pointer border border-stone-800"
-              title="View Flutter Code and GitHub APK Build Guide"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-[#4ECDC4]" />
-              <span className="hidden sm:inline">Flutter &amp; GitHub APK</span>
-              <span className="sm:hidden">Flutter APK</span>
             </button>
 
             {/* Print / PDF */}

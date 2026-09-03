@@ -28,6 +28,7 @@ import {
   Compass as CompassIcon,
   Search,
   Star,
+  Calendar,
   X,
   ChevronLeft,
   ChevronRight,
@@ -35,7 +36,8 @@ import {
   Utensils,
   Landmark,
   Compass,
-  AlertCircle
+  AlertCircle,
+  ArrowRight
 } from 'lucide-react';
 
 interface PreferenceFormProps {
@@ -316,6 +318,56 @@ export const PREFERENCE_TAGS: PreferenceTag[] = [
   },
 ];
 
+function addDaysISO(isoStr: string, days: number): string {
+  if (!isoStr) return '';
+  const parts = isoStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const date = new Date(y, m, d, 12, 0, 0);
+    date.setDate(date.getDate() + days);
+    const ry = date.getFullYear();
+    const rm = String(date.getMonth() + 1).padStart(2, '0');
+    const rd = String(date.getDate()).padStart(2, '0');
+    return `${ry}-${rm}-${rd}`;
+  }
+  return isoStr;
+}
+
+function calculateDurationDays(startIso: string, endIso: string): number {
+  if (!startIso || !endIso) return 1;
+  const startParts = startIso.split('-').map(Number);
+  const endParts = endIso.split('-').map(Number);
+  if (startParts.length !== 3 || endParts.length !== 3) return 1;
+  const start = new Date(startParts[0], startParts[1] - 1, startParts[2], 12, 0, 0);
+  const end = new Date(endParts[0], endParts[1] - 1, endParts[2], 12, 0, 0);
+  const diffTime = end.getTime() - start.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(1, diffDays + 1);
+}
+
+function formatPrettyDateString(isoStr: string): string {
+  if (!isoStr) return '';
+  const parts = isoStr.split('-').map(Number);
+  if (parts.length !== 3) return isoStr;
+  const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+  return d.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getTodayISO(): string {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export const PreferenceForm: React.FC<PreferenceFormProps> = ({
   onSubmit,
   isLoading,
@@ -323,7 +375,42 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
 }) => {
   const [destination, setDestination] = useState('');
   const [occasion, setOccasion] = useState('Vacation / Leisure');
-  const [durationDays, setDurationDays] = useState(4);
+  const [startDate, setStartDate] = useState(() => getTodayISO());
+  const [endDate, setEndDate] = useState(() => addDaysISO(getTodayISO(), 3));
+  const [durationDays, setDurationDays] = useState(() =>
+    calculateDurationDays(getTodayISO(), addDaysISO(getTodayISO(), 3))
+  );
+
+  const handleStartDateChange = (newStart: string) => {
+    setStartDate(newStart);
+    if (!newStart) return;
+    if (endDate && newStart <= endDate) {
+      setDurationDays(calculateDurationDays(newStart, endDate));
+    } else {
+      const newEnd = addDaysISO(newStart, Math.max(1, durationDays) - 1);
+      setEndDate(newEnd);
+      setDurationDays(calculateDurationDays(newStart, newEnd));
+    }
+  };
+
+  const handleEndDateChange = (newEnd: string) => {
+    setEndDate(newEnd);
+    if (!newEnd) return;
+    if (startDate && newEnd >= startDate) {
+      setDurationDays(calculateDurationDays(startDate, newEnd));
+    } else {
+      setStartDate(newEnd);
+      setDurationDays(1);
+    }
+  };
+
+  const handleApplyPresetDuration = (days: number) => {
+    triggerHaptic('light');
+    const safeStart = startDate || getTodayISO();
+    const newEnd = addDaysISO(safeStart, Math.max(1, days) - 1);
+    setEndDate(newEnd);
+    setDurationDays(days);
+  };
   const [travelersCount, setTravelersCount] = useState(2);
   const [travelerType, setTravelerType] = useState('Couple');
   const [budget, setBudget] = useState<'Budget' | 'Moderate' | 'Luxury'>('Moderate');
@@ -468,6 +555,8 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
       destination: destination.trim() || 'Tokyo, Japan',
       occasion,
       durationDays,
+      startDate,
+      endDate,
       travelersCount,
       travelerType,
       budget,
@@ -661,63 +750,172 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
           </div>
         </div>
 
-        {/* 5. "DURATION" WINDING DOTTED TRAIL WITH RETRO CAMPER VAN */}
-        <div className="cozy-card p-5 sm:p-7 space-y-4">
-          <div className="flex items-center justify-between">
+        {/* 5. "TRIP DATES: START & END DATE" - AUTOMATICALLY DERIVES DURATION */}
+        <div 
+          id="trip-dates-card" 
+          className="cozy-card p-5 sm:p-7 space-y-5"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-xs sm:text-sm font-black text-[#3E3025] tracking-wider uppercase flex items-center gap-2">
-              <span>✦</span>
-              <span>DURATION</span>
+              <span className="text-[#FF7A59]">✦</span>
+              <span>TRIP DATES (START &amp; END)</span>
             </h3>
-            <span className="text-xs font-black text-[#FF7A59] bg-[#FFE2D6] px-3 py-1 rounded-full border border-[#FFC7B5]">
-              {durationDays} {durationDays === 1 ? 'Day Trip' : 'Days Total'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-[#FF7A59] bg-[#FFE2D6] px-3.5 py-1 rounded-full border border-[#FFC7B5] shadow-2xs inline-flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{durationDays} {durationDays === 1 ? 'Day Trip' : 'Days Total'}</span>
+                {durationDays > 1 && (
+                  <span className="text-stone-500 font-bold hidden xs:inline sm:inline">
+                    • {durationDays - 1} Nights
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
 
-          {/* Interactive Dotted Trail with milestone stations & camper van */}
-          <div className="relative py-8 px-2 sm:px-6">
-            {/* SVG Connecting Trail */}
-            <div className="absolute left-8 right-8 top-1/2 -translate-y-1/2 h-2 pointer-events-none">
-              <div className="w-full border-b-2 border-dashed border-[#DFB277] relative" />
+          {/* Dual Date Selection: Start Date & End Date */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Start Date Card */}
+            <div className="bg-[#FFFDF7] rounded-2xl p-4 border-2 border-[#DFB277]/60 hover:border-[#FF7A59]/60 transition-all shadow-2xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#FFEAE2] border border-[#FFC7B5] text-[#FF7A59] flex items-center justify-center shrink-0 shadow-2xs">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <label 
+                      htmlFor="input-start-date" 
+                      className="text-xs font-black text-[#2D241E] uppercase tracking-wide block cursor-pointer"
+                    >
+                      Start Date (Departure)
+                    </label>
+                    <span className="text-[10px] text-stone-500 font-bold block">
+                      When your adventure begins
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black uppercase text-[#FF7A59] bg-[#FFEAE2] px-2 py-0.5 rounded-md border border-[#FFC7B5]">
+                  Day 1
+                </span>
+              </div>
+
+              <input
+                id="input-start-date"
+                type="date"
+                value={startDate}
+                min={getTodayISO()}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#DFB277]/60 text-sm font-black text-[#2D241E] bg-white focus:outline-none focus:ring-2 focus:ring-[#FF7A59] focus:border-[#FF7A59] shadow-inner cursor-pointer"
+              />
+
+              <div className="text-xs font-bold text-stone-600 pl-1 flex items-center justify-between">
+                <span>{formatPrettyDateString(startDate)}</span>
+                <span className="text-[10px] text-[#FF7A59] font-black uppercase tracking-wider">Departure</span>
+              </div>
             </div>
 
-            {/* Milestones 1d through 7d */}
-            <div className="relative z-10 flex items-center justify-between gap-1 sm:gap-2">
-              {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-                const isActive = durationDays === day;
-                return (
-                  <div key={day} className="relative flex flex-col items-center">
-                    {/* Speech bubble above the active day */}
-                    {isActive && (
-                      <div className="absolute -top-12 z-20 flex flex-col items-center animate-bounce">
-                        <div className="bg-white rounded-xl px-2.5 py-1 shadow-sm border border-stone-200 text-xs font-black text-[#2D241E] whitespace-nowrap">
-                          {day} {day === 1 ? 'Day' : 'Days'}
-                        </div>
-                        {/* Downward triangle tail */}
-                        <div className="w-2 h-2 bg-white border-r border-b border-stone-200 transform rotate-45 -mt-1" />
-                      </div>
-                    )}
-
-                    {/* Milestone Button Circle */}
-                    <button
-                      type="button"
-                      id={`btn-duration-${day}d`}
-                      onClick={() => setDurationDays(day)}
-                      className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full font-black text-xs sm:text-sm transition-all duration-200 flex items-center justify-center cursor-pointer ${
-                        isActive
-                          ? 'bg-[#3D291F] text-white ring-4 ring-[#FFE17D] shadow-md scale-110'
-                          : 'bg-[#FFFDF7] hover:bg-white text-[#5C483A] border-2 border-[#DFB277]/70 shadow-2xs hover:scale-105'
-                      }`}
-                    >
-                      {day}d
-                    </button>
-
-                    {/* Cute Camper Van driving beside active milestone */}
-                    {isActive && (
-                      <div className="absolute -bottom-11 z-20 transition-all">
-                        <CozyCamperVan className="w-14 h-9 sm:w-16 sm:h-10" />
-                      </div>
-                    )}
+            {/* End Date Card */}
+            <div className="bg-[#FFFDF7] rounded-2xl p-4 border-2 border-[#DFB277]/60 hover:border-[#0D9488]/60 transition-all shadow-2xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#E0F9F7] border border-[#A7F3D0] text-[#0D9488] flex items-center justify-center shrink-0 shadow-2xs">
+                    <Calendar className="w-4 h-4" />
                   </div>
+                  <div>
+                    <label 
+                      htmlFor="input-end-date" 
+                      className="text-xs font-black text-[#2D241E] uppercase tracking-wide block cursor-pointer"
+                    >
+                      End Date (Return)
+                    </label>
+                    <span className="text-[10px] text-stone-500 font-bold block">
+                      When your journey wraps up
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black uppercase text-[#0D9488] bg-[#E0F9F7] px-2 py-0.5 rounded-md border border-[#A7F3D0]">
+                  Day {durationDays}
+                </span>
+              </div>
+
+              <input
+                id="input-end-date"
+                type="date"
+                value={endDate}
+                min={startDate || getTodayISO()}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#DFB277]/60 text-sm font-black text-[#2D241E] bg-white focus:outline-none focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] shadow-inner cursor-pointer"
+              />
+
+              <div className="text-xs font-bold text-stone-600 pl-1 flex items-center justify-between">
+                <span>{formatPrettyDateString(endDate)}</span>
+                <span className="text-[10px] text-[#0D9488] font-black uppercase tracking-wider">Return</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dotted Trail Visualizer with Camper Van */}
+          <div className="relative py-4 px-3 sm:px-6 bg-[#FAF6EE] rounded-2xl border border-[#E9DEC9] overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+              {/* Left departure badge */}
+              <div className="text-center sm:text-left shrink-0">
+                <div className="text-[10px] font-mono font-extrabold uppercase text-stone-400">Departure</div>
+                <div className="text-xs font-black text-[#2D241E]">{formatPrettyDateString(startDate).split(',')[1] || startDate}</div>
+              </div>
+
+              {/* Center dashed road with camper van and calculated days */}
+              <div className="flex-1 w-full flex flex-col items-center px-2">
+                <div className="w-full relative flex items-center justify-center py-2">
+                  <div className="w-full border-b-2 border-dashed border-[#DFB277] absolute top-1/2 -translate-y-1/2" />
+                  <div className="relative z-10 bg-[#FAF6EE] px-3.5 py-1.5 rounded-full border border-[#DFB277]/80 flex items-center gap-2 shadow-xs">
+                    <CozyCamperVan className="w-8 h-5" />
+                    <span className="text-xs font-black text-[#2D241E] whitespace-nowrap">
+                      {durationDays} Days / {durationDays > 1 ? `${durationDays - 1} Nights` : '1 Day'}
+                    </span>
+                    <Sparkles className="w-3.5 h-3.5 text-[#FF7A59]" />
+                  </div>
+                </div>
+                <div className="text-[10px] text-stone-500 font-medium text-center">
+                  Duration is automatically derived from your Start and End dates
+                </div>
+              </div>
+
+              {/* Right return badge */}
+              <div className="text-center sm:text-right shrink-0">
+                <div className="text-[10px] font-mono font-extrabold uppercase text-stone-400">Return</div>
+                <div className="text-xs font-black text-[#2D241E]">{formatPrettyDateString(endDate).split(',')[1] || endDate}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Duration Adjuster Chips */}
+          <div className="pt-1 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] font-bold text-stone-500 flex items-center gap-1.5">
+              <span>Quick range adjustments:</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { days: 3, label: '3d Weekend' },
+                { days: 4, label: '4 Days' },
+                { days: 5, label: '5 Days' },
+                { days: 7, label: '7d (1 Wk)' },
+                { days: 10, label: '10 Days' },
+                { days: 14, label: '14d (2 Wks)' },
+              ].map((preset) => {
+                const isCurrent = durationDays === preset.days;
+                return (
+                  <button
+                    key={preset.days}
+                    type="button"
+                    onClick={() => handleApplyPresetDuration(preset.days)}
+                    className={`text-xs font-black px-2.5 py-1 rounded-xl transition-all cursor-pointer border ${
+                      isCurrent
+                        ? 'bg-[#3D291F] text-white border-[#3D291F] shadow-xs'
+                        : 'bg-[#FFFDF7] hover:bg-white text-[#5C483A] border-[#DFB277]/70 hover:border-[#FF7A59]'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
                 );
               })}
             </div>

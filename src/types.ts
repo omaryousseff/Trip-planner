@@ -85,17 +85,50 @@ export interface GroundingSource {
   url: string;
 }
 
+export interface DailyWeatherForecast {
+  date: string;
+  dayIndex: number;
+  dayName: string;
+  dayOfWeek: string;
+  formattedDate: string;
+  weatherCode: number;
+  condition: string;
+  iconName: 'Sun' | 'CloudSun' | 'Cloud' | 'CloudRain' | 'CloudDrizzle' | 'CloudLightning' | 'CloudSnow' | 'Wind';
+  tempMaxC: number;
+  tempMinC: number;
+  tempAvgC: number;
+  tempMaxF: number;
+  tempMinF: number;
+  tempAvgF: number;
+  precipitationChance: number;
+  advice: string;
+}
+
+export interface FiveDayWeatherForecastData {
+  destination: string;
+  startDate: string;
+  endDate: string;
+  isRealtime: boolean;
+  source: string;
+  days: DailyWeatherForecast[];
+  averageRangeC: { min: number; max: number; avg: number };
+  averageRangeF: { min: number; max: number; avg: number };
+}
+
 export interface TripPlan {
   id?: string;
   destination: string;
   occasion: string;
   durationDays: number;
+  startDate?: string;
+  endDate?: string;
   travelersCount: number;
   travelerType: string;
   budget: BudgetLevel;
   pace: TravelPace;
   overview: string;
   weatherSummary: string;
+  weatherForecast?: FiveDayWeatherForecastData;
   currencyAndCostEstimate: CurrencyAndCostEstimate;
   transportationGuide: TransportationGuide;
   packingAndPrepTips: string[];
@@ -110,6 +143,8 @@ export interface TripPreferences {
   destination: string;
   occasion: string;
   durationDays: number;
+  startDate?: string;
+  endDate?: string;
   travelersCount: number;
   travelerType: string;
   budget: BudgetLevel;

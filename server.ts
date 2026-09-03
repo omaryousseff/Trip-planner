@@ -8,6 +8,14 @@ import { generateFallbackTripPlan, generateFallbackItem } from "./src/data/fallb
 import { resolvePlaceCoordinates } from "./src/utils/geoCoordinates";
 import { getLandmarkPhoto } from "./src/utils/landmarkImages";
 import { fetchPinterestPlacePhoto, scrapePinterestPins } from "./src/utils/pinterestScraper";
+import {
+  generateSeasonalForecast,
+  getWeatherConditionInfo,
+  celsiusToFahrenheit,
+  formatDateISO,
+  parseDateISO,
+  formatDisplayDate,
+} from "./src/utils/weatherService";
 
 dotenv.config();
 
@@ -25,6 +33,134 @@ async function startServer() {
     res.json({ status: "ok", time: new Date().toISOString() });
   });
 
+  // Memory cache for fetched weather forecasts
+  const weatherCache = new Map<string, { data: any; timestamp: number }>();
+  const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 mins
+
+  // 5-Day Weather Forecast Endpoint
+  app.get("/api/weather", async (req, res) => {
+    try {
+      const destination = (req.query.destination as string || "Tokyo, Japan").trim();
+      const startDateStr = (req.query.startDate as string || "").trim() || formatDateISO(new Date());
+      const cacheKey = `${destination.toLowerCase()}_${startDateStr}`;
+
+      const cached = weatherCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < WEATHER_CACHE_TTL) {
+        return res.json(cached.data);
+      }
+
+      // Step 1: Geocode city using Open-Meteo
+      const cleanCity = destination.split(",")[0].replace(/\([^)]*\)/g, "").trim();
+      let forecastData: any = null;
+
+      try {
+        const geoRes = await fetch(
+          `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanCity)}&count=1`
+        );
+        if (geoRes.ok) {
+          const geoJson: any = await geoRes.json();
+          if (geoJson.results && geoJson.results.length > 0) {
+            const { latitude, longitude, name, country } = geoJson.results[0];
+
+            const start = parseDateISO(startDateStr);
+            const end = new Date(start.getTime() + 4 * 24 * 60 * 60 * 1000);
+            const startFormatted = formatDateISO(start);
+            const endFormatted = formatDateISO(end);
+
+            // Fetch daily weather
+            const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&start_date=${startFormatted}&end_date=${endFormatted}`;
+            const weatherRes = await fetch(weatherUrl);
+
+            if (weatherRes.ok) {
+              const wJson: any = await weatherRes.json();
+              if (wJson.daily && wJson.daily.time && wJson.daily.time.length >= 5) {
+                const days: any[] = [];
+                const times: string[] = wJson.daily.time;
+                const codes: number[] = wJson.daily.weathercode;
+                const maxs: number[] = wJson.daily.temperature_2m_max;
+                const mins: number[] = wJson.daily.temperature_2m_min;
+                const rains: number[] = wJson.daily.precipitation_probability_max || [];
+
+                let sumMax = 0;
+                let sumMin = 0;
+
+                for (let i = 0; i < 5; i++) {
+                  const dStr = times[i];
+                  const dDate = parseDateISO(dStr);
+                  const { dayOfWeek, formattedDate } = formatDisplayDate(dDate);
+                  const code = codes[i] ?? 1;
+                  const { condition, iconName, advice } = getWeatherConditionInfo(code);
+
+                  const maxC = Math.round(maxs[i] * 10) / 10;
+                  const minC = Math.round(mins[i] * 10) / 10;
+                  const avgC = Math.round(((maxC + minC) / 2) * 10) / 10;
+
+                  sumMax += maxC;
+                  sumMin += minC;
+
+                  days.push({
+                    date: dStr,
+                    dayIndex: i + 1,
+                    dayName: `Day ${i + 1}`,
+                    dayOfWeek,
+                    formattedDate,
+                    weatherCode: code,
+                    condition,
+                    iconName,
+                    tempMaxC: maxC,
+                    tempMinC: minC,
+                    tempAvgC: avgC,
+                    tempMaxF: celsiusToFahrenheit(maxC),
+                    tempMinF: celsiusToFahrenheit(minC),
+                    tempAvgF: celsiusToFahrenheit(avgC),
+                    precipitationChance: rains[i] ?? 15,
+                    advice,
+                  });
+                }
+
+                const overallMaxC = Math.round(Math.max(...days.map((d) => d.tempMaxC)));
+                const overallMinC = Math.round(Math.min(...days.map((d) => d.tempMinC)));
+                const overallAvgC = Math.round((sumMax + sumMin) / 10);
+
+                forecastData = {
+                  destination: `${name}, ${country || destination}`,
+                  startDate: days[0].date,
+                  endDate: days[days.length - 1].date,
+                  isRealtime: true,
+                  source: "Live Open-Meteo Meteorological Service",
+                  days,
+                  averageRangeC: { min: overallMinC, max: overallMaxC, avg: overallAvgC },
+                  averageRangeF: {
+                    min: celsiusToFahrenheit(overallMinC),
+                    max: celsiusToFahrenheit(overallMaxC),
+                    avg: celsiusToFahrenheit(overallAvgC),
+                  },
+                };
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Open-Meteo query failed:", err);
+      }
+
+      // Step 2: If live query fails or is outside horizon, fallback to curated seasonal climate model
+      if (!forecastData) {
+        forecastData = generateSeasonalForecast(destination, startDateStr);
+      }
+
+      weatherCache.set(cacheKey, { data: forecastData, timestamp: Date.now() });
+      return res.json(forecastData);
+    } catch (globalErr: any) {
+      console.error("Weather endpoint error:", globalErr);
+      const fallback = generateSeasonalForecast(
+        (req.query.destination as string) || "Tokyo, Japan",
+        req.query.startDate as string
+      );
+      return res.json(fallback);
+    }
+  });
+
   // Memory cache for fetched landmark and place photos
   const photoCache = new Map<string, any>();
 
@@ -40,53 +176,7 @@ async function startServer() {
     }
 
     try {
-      const GOOGLE_API_KEY = process.env.GOOGLE_SEARCH_API_KEY;
-      const GOOGLE_CX = process.env.GOOGLE_SEARCH_CX;
-
-      // Tier 1: If Google Custom Search API credentials are provided, search Pinterest for (place name city)
-      if (GOOGLE_API_KEY && GOOGLE_CX) {
-        const searchQuery = `${cleanTitle} ${cleanCity}`.trim();
-        const searchUrl = `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(searchQuery)}&cx=${GOOGLE_CX}&searchType=image&siteSearch=pinterest.com&key=${GOOGLE_API_KEY}&num=3`;
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-        const res = await fetch(searchUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.items && data.items.length > 0) {
-            const topItem = data.items[0];
-            const allUrls = data.items.slice(0, 3).map((item: any) => item.link);
-            const alternativePhotos = data.items.slice(1, 3).map((item: any, idx: number) => ({
-              url: item.link,
-              caption: item.title || `${cleanTitle} - Angle ${idx + 2}`,
-              source: 'Pinterest',
-              sourceType: 'pinterest' as const,
-              pinUrl: item.image?.contextLink || item.link,
-            }));
-
-            const photoResult = {
-              url: topItem.link,
-              caption: topItem.title || title,
-              source: 'Pinterest',
-              sourceType: 'pinterest' as const,
-              officialWebsiteUrl: topItem.image?.contextLink || topItem.link,
-              tripAdvisorUrl: topItem.image?.contextLink || topItem.link,
-              description: topItem.snippet || `${cleanTitle} in ${cleanCity}`,
-              googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${cleanTitle} ${location || ''} ${cleanCity}`.trim())}`,
-              photos: allUrls, // Up to 3 best photos from Pinterest
-              alternativePhotos,
-            };
-
-            photoCache.set(cacheKey, photoResult);
-            return photoResult;
-          }
-        }
-      }
-
-      // Tier 2: Direct Keyless Pinterest Web Scraper (No API keys required, searches strictly: place name city)
+      // Direct Keyless Pinterest Scraper (Searches strictly: place name city, no API keys or setup required)
       const scraped = await fetchPinterestPlacePhoto(cleanTitle, location, cleanCity);
       if (scraped && scraped.url) {
         photoCache.set(cacheKey, scraped);
@@ -125,6 +215,8 @@ async function startServer() {
         destination,
         occasion,
         durationDays = 3,
+        startDate,
+        endDate,
         travelersCount = 2,
         travelerType = "Couple",
         budget = "Moderate",
@@ -383,6 +475,8 @@ You MUST respond with a single valid JSON object strictly matching this schema (
       // Attach sources and enrich coordinates & landmark photography
       planData.sources = sources;
       planData.createdAt = new Date().toISOString();
+      if (startDate) planData.startDate = startDate;
+      if (endDate) planData.endDate = endDate;
 
       if (planData && Array.isArray(planData.days)) {
         const photoPromises: Promise<any>[] = [];

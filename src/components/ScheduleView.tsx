@@ -595,61 +595,41 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         />
       )}
 
-      {/* Day Picker Tactile Tabs Header */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        {days.map((day, idx) => {
-          const isActive = idx === activeDayIndex;
-          const completedCount = day.schedule.filter((i) => i.completed).length;
+      {/* Day Picker Tactile Tabs Header with Active Day Title */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
+          {days.map((day, idx) => {
+            const isActive = idx === activeDayIndex;
+            const completedCount = day.schedule.filter((i) => i.completed).length;
 
-          return (
-            <button
-              key={day.dayNumber}
-              type="button"
-              onClick={() => {
-                triggerHaptic('light');
-                onSelectDay(idx);
-              }}
-              className={`relative px-4 py-2.5 rounded-2xl font-black text-xs transition-all shrink-0 cursor-pointer flex items-center gap-2 border-2 ${
-                isActive
-                  ? 'bg-[#FF7A59] border-[#E05030] text-white shadow-md'
-                  : 'bg-[#FFFDF9] border-[#EAE0D0] text-stone-700 hover:border-stone-400'
-              }`}
-            >
-              <span>Day {day.dayNumber}</span>
-              {completedCount > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${isActive ? 'bg-white text-[#FF7A59]' : 'bg-stone-200 text-stone-700'}`}>
-                  {completedCount}/{day.schedule.length}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Day Overview Scrapbook Note */}
-      <div className="postcard-card p-6 rounded-3xl relative">
-        <div className="absolute -top-3 right-8">
-          <WashiTape color="gold" rotation={2} />
+            return (
+              <button
+                key={day.dayNumber}
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  onSelectDay(idx);
+                }}
+                className={`relative px-4 py-2.5 rounded-2xl font-black text-xs transition-all shrink-0 cursor-pointer flex items-center gap-2 border-2 ${
+                  isActive
+                    ? 'bg-[#FF7A59] border-[#E05030] text-white shadow-md'
+                    : 'bg-[#FFFDF9] border-[#EAE0D0] text-stone-700 hover:border-stone-400'
+                }`}
+              >
+                <span>Day {day.dayNumber}</span>
+                {completedCount > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${isActive ? 'bg-white text-[#FF7A59]' : 'bg-stone-200 text-stone-700'}`}>
+                    {completedCount}/{day.schedule.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <span className="text-[11px] font-mono uppercase tracking-wider font-bold text-stone-400">
-              DAY {currentDay.dayNumber} OF {days.length} • {destination}
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-black text-[#2D241E] font-cozy-serif">
-              {currentDay.title}
-            </h2>
-          </div>
-
-          <div className="shrink-0 text-xs font-bold text-stone-500 bg-[#FAF4EA] px-3 py-1.5 rounded-xl border border-[#EFE5D8]">
-            <span>✨ Drag sticky notes to re-order sequence</span>
-          </div>
+        <div className="flex items-center gap-2 text-xs text-stone-600 font-medium">
+          <span className="font-cozy-serif text-base sm:text-lg font-black text-[#2D241E]">{currentDay.title}</span>
         </div>
-
-        <p className="text-xs sm:text-sm text-stone-600 leading-relaxed font-medium mt-2">
-          {currentDay.summary}
-        </p>
       </div>
 
       {/* ANIMATED VERTICAL TIMELINE CONTAINER */}
