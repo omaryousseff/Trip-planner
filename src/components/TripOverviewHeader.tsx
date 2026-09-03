@@ -21,7 +21,6 @@ import { FiveDayWeatherForecast } from './FiveDayWeatherForecast';
 interface TripOverviewHeaderProps {
   plan: TripPlan;
   onReset: () => void;
-  onOpenFlutterModal?: () => void;
   isMobileDeviceView?: boolean;
   onToggleMobileDeviceView?: () => void;
   isTodayMode?: boolean;
@@ -151,6 +150,18 @@ export const TripOverviewHeader: React.FC<TripOverviewHeaderProps> = ({
             <span className="text-[11px] font-black uppercase tracking-wider text-[#3D3582] bg-[#E2DEFD] px-3.5 py-1 rounded-full border border-[#C8C2F8] shadow-xs">
               {plan.budget} • {plan.pace}
             </span>
+            {plan.homeBase && (
+              <span className="text-[11px] font-black uppercase tracking-wider text-[#754412] bg-[#FFEAD1] px-3.5 py-1 rounded-full border border-[#FFD4A8] shadow-xs flex items-center gap-1.5">
+                <span>🏨</span>
+                <span>Base: {plan.homeBase}</span>
+              </span>
+            )}
+            {plan.morningDepartureTime && plan.eveningReturnTime && (
+              <span className="text-[11px] font-black uppercase tracking-wider text-[#115C8C] bg-[#E0F4FF] px-3.5 py-1 rounded-full border border-[#B8E3FF] shadow-xs flex items-center gap-1.5">
+                <span>⏰</span>
+                <span>{plan.morningDepartureTime} – {plan.eveningReturnTime}</span>
+              </span>
+            )}
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#2D241E] font-cozy-serif tracking-tight">

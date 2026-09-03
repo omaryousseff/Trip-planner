@@ -181,7 +181,7 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
 
   // Tokyo
   'senso-ji': {
-    url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+    url: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=1200&q=80',
     caption: 'Senso-ji Temple & Kaminarimon, Asakusa',
     source: 'Official Website (senso-ji.jp)',
     sourceType: 'official_website',
@@ -194,11 +194,25 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
         caption: 'Senso-ji Five-Story Pagoda & Incense Smoke',
         sourceType: 'tripadvisor',
       },
+      {
+        url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80',
+        source: 'Official Tokyo Tourism Archive',
+        caption: 'Asakusa Kaminarimon Grand Lantern Gate',
+        sourceType: 'tourism_board',
+      },
     ],
   },
   'sensoji': {
-    url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+    url: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=1200&q=80',
     caption: 'Senso-ji Temple, Tokyo',
+    source: 'Official Website (senso-ji.jp)',
+    sourceType: 'official_website',
+    officialWebsiteUrl: 'https://www.senso-ji.jp',
+    tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066461-d320050-Reviews-Senso_ji_Temple-Taito_Tokyo_Tokyo_Prefecture_Kanto.html',
+  },
+  'asakusa': {
+    url: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=1200&q=80',
+    caption: 'Historic Asakusa & Senso-ji Quarter, Tokyo',
     source: 'Official Website (senso-ji.jp)',
     sourceType: 'official_website',
     officialWebsiteUrl: 'https://www.senso-ji.jp',
@@ -212,10 +226,16 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
     tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066456-d1373809-Reviews-Shibuya_Crossing-Shibuya_Tokyo_Tokyo_Prefecture_Kanto.html',
     alternativePhotos: [
       {
-        url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+        url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80',
         source: 'Official Tokyo Tourism Board (gotokyo.org)',
         caption: 'Shibuya Sky & Neon Skyline at Night',
         sourceType: 'tourism_board',
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=1200&q=80',
+        source: 'TripAdvisor Verified Traveler Archive',
+        caption: 'Shibuya Neon Crosswalks & Atmosphere',
+        sourceType: 'tripadvisor',
       },
     ],
   },
@@ -243,11 +263,56 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
     tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066443-d320054-Reviews-Akihabara-Chiyoda_Tokyo_Tokyo_Prefecture_Kanto.html',
   },
   'shinjuku': {
-    url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+    url: 'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=1200&q=80',
     caption: 'Shinjuku Neon Alleys & Omoide Yokocho',
     source: 'TripAdvisor Verified Dining Archive',
     sourceType: 'tripadvisor',
     tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066457-d320057-Reviews-Shinjuku_Gyoen_National_Garden-Shinjuku_Tokyo_Tokyo_Prefecture_Kanto.html',
+    alternativePhotos: [
+      {
+        url: 'https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=1200&q=80',
+        source: 'TripAdvisor Verified Dining Archive',
+        caption: 'Omoide Yokocho (Memory Lane) Lanterns',
+        sourceType: 'tripadvisor',
+      },
+    ],
+  },
+  'omoide': {
+    url: 'https://images.unsplash.com/photo-1554797589-7241bb691973?auto=format&fit=crop&w=1200&q=80',
+    caption: 'Omoide Yokocho (Memory Lane) Yakitori, Shinjuku',
+    source: 'TripAdvisor Verified Dining Archive',
+    sourceType: 'tripadvisor',
+    tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066457-d8794833-Reviews-Omoide_Yokocho-Shinjuku_Tokyo_Tokyo_Prefecture_Kanto.html',
+  },
+  'tokyo tower': {
+    url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+    caption: 'Tokyo Tower & Minato Skyline at Night',
+    source: 'Official Observatory Site (tokyotower.co.jp)',
+    sourceType: 'official_website',
+    officialWebsiteUrl: 'https://www.tokyotower.co.jp',
+    tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066451-d320055-Reviews-Tokyo_Tower-Minato_Tokyo_Tokyo_Prefecture_Kanto.html',
+  },
+  'teamlab': {
+    url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80',
+    caption: 'teamLab Planets Digital Art Museum, Tokyo',
+    source: 'Official Museum Site (planets.teamlab.art)',
+    sourceType: 'official_website',
+    officialWebsiteUrl: 'https://planets.teamlab.art',
+    tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066449-d14986629-Reviews-TeamLab_Planets_TOKYO-Koto_Tokyo_Tokyo_Prefecture_Kanto.html',
+  },
+  'misojyu': {
+    url: 'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&w=1200&q=80',
+    caption: 'Traditional Miso & Onigiri Breakfast at Misojyu Asakusa',
+    source: 'TripAdvisor Verified Dining Collection',
+    sourceType: 'tripadvisor',
+    tripAdvisorUrl: 'https://www.tripadvisor.com/Restaurant_Review-g1066461-d14190890-Reviews-Misojyu-Taito_Tokyo_Tokyo_Prefecture_Kanto.html',
+  },
+  'shimokitazawa': {
+    url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80',
+    caption: 'Shimokitazawa Vintage Shops & Bohemian Streets',
+    source: 'TripAdvisor Neighborhood Guide',
+    sourceType: 'tripadvisor',
+    tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g1066455-d592476-Reviews-Shimokitazawa-Setagaya_Tokyo_Tokyo_Prefecture_Kanto.html',
   },
   'tsukiji': {
     url: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=1200&q=80',
@@ -377,7 +442,7 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
     tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g298564-d321401-Reviews-Fushimi_Inari_taisha_Shrine-Kyoto_Kyoto_Prefecture_Kinki.html',
     alternativePhotos: [
       {
-        url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+        url: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?auto=format&fit=crop&w=1200&q=80',
         source: 'TripAdvisor Verified Traveler Archive',
         caption: 'Fushimi Inari Vermillion Shrine Pathway',
         sourceType: 'tripadvisor',
@@ -385,7 +450,7 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
     ],
   },
   'kinkaku': {
-    url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+    url: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?auto=format&fit=crop&w=1200&q=80',
     caption: 'Kinkaku-ji (The Golden Pavilion), Kyoto',
     source: 'Official Temple Site (shokoku-ji.jp/kinkakuji)',
     sourceType: 'official_website',
@@ -393,8 +458,8 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
     tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g298564-d321402-Reviews-Kinkaku_ji_Temple-Kyoto_Kyoto_Prefecture_Kinki.html',
   },
   'arashiyama': {
-    url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1200&q=80',
-    caption: 'Arashiyama Sagano Bamboo Forest, Kyoto',
+    url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+    caption: 'Arashiyama Sagano Bamboo Grove, Kyoto',
     source: 'Kyoto Tourism Official Archive (kyoto.travel)',
     sourceType: 'tourism_board',
     officialWebsiteUrl: 'https://kyoto.travel',
@@ -447,6 +512,7 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
 // Curated authentic imagery for specific themes and activities
 const THEMATIC_PHOTOS = {
   // Food & Dining
+  food_breakfast: 'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&w=800&q=80',
   food_ramen: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80',
   food_sushi: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=800&q=80',
   food_bakery: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80',

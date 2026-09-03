@@ -10,6 +10,10 @@ export const SAMPLE_TRIPS: TripPlan[] = [
     travelerType: "Group of Friends",
     budget: "Moderate",
     pace: "Balanced",
+    homeBase: "Hotel Gracery Shinjuku, Tokyo",
+    homeBaseCoords: { lat: 35.6953, lng: 139.7020 },
+    morningDepartureTime: "08:30 AM",
+    eveningReturnTime: "10:30 PM",
     overview: "A high-energy 3-day exploration designed for a group of friends, balancing hyper-modern neon districts, historic shrines, legendary ramen and street food alleys, and scenic viewpoints across Tokyo's most vibrant neighborhoods.",
     weatherSummary: "Mild and pleasant, around 18°C–23°C. Comfortable walking shoes and light layering with an umbrella are recommended.",
     currencyAndCostEstimate: {

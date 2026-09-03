@@ -95,6 +95,53 @@ export function generateFallbackTripPlan(preferences: TripPreferences): TripPlan
   if (preferences.endDate) {
     plan.endDate = preferences.endDate;
   }
+  if (preferences.homeBase) {
+    plan.homeBase = preferences.homeBase;
+  }
+  if (preferences.homeBaseCoords) {
+    plan.homeBaseCoords = preferences.homeBaseCoords;
+  }
+  if (preferences.morningDepartureTime) {
+    plan.morningDepartureTime = preferences.morningDepartureTime;
+  }
+  if (preferences.eveningReturnTime) {
+    plan.eveningReturnTime = preferences.eveningReturnTime;
+  }
+
+  // Anchor Nodes hard constraints: Node A (Depart Home Base) & Node Z (Return Home Base)
+  if (preferences.homeBase && plan.days) {
+    plan.days.forEach((d) => {
+      if (d.schedule && d.schedule.length > 0) {
+        // Adjust first item time and prepend departure from homeBase
+        const first = d.schedule[0];
+        if (preferences.morningDepartureTime) {
+          first.time = preferences.morningDepartureTime;
+        }
+        if (!first.description.includes(preferences.homeBase)) {
+          first.description = `[Depart from ${preferences.homeBase}] ${first.description}`;
+        }
+
+        // Check if return to home base step already exists, if not, append return transit buffer
+        const last = d.schedule[d.schedule.length - 1];
+        const eveningTime = preferences.eveningReturnTime || '10:00 PM';
+        if (!last.title.toLowerCase().includes('return') && !last.title.toLowerCase().includes('hotel') && !last.title.toLowerCase().includes('home base')) {
+          d.schedule.push({
+            id: `${d.dayNumber}-return-home`,
+            time: eveningTime,
+            timeSlot: 'evening',
+            title: `Return to ${preferences.homeBase}`,
+            category: 'transport',
+            description: `Transit buffer from final evening stop back to ${preferences.homeBase}. Walk through your hotel door right on schedule!`,
+            location: preferences.homeBase,
+            duration: '30-45 mins',
+            costEstimate: 'Local metro / walking',
+            tips: `Safe and convenient transit back to your home base (${preferences.homeBase}).`,
+            coordinates: preferences.homeBaseCoords || first.coordinates,
+          });
+        }
+      }
+    });
+  }
 
   return plan;
 }

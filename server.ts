@@ -161,6 +161,94 @@ async function startServer() {
     }
   });
 
+  // Places & Accommodations Autocomplete Endpoint
+  app.get("/api/places-autocomplete", async (req, res) => {
+    try {
+      const q = (req.query.q as string || "").trim();
+      const destination = (req.query.destination as string || "").trim();
+      if (!q) return res.json({ predictions: [] });
+
+      const predictions: any[] = [];
+      const cleanCity = destination.split(",")[0].trim();
+
+      // 1. If Google Maps Platform API key is available in environment
+      if (process.env.GOOGLE_MAPS_API_KEY) {
+        try {
+          const gRes = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": process.env.GOOGLE_MAPS_API_KEY,
+              "X-Goog-Maps-Solution-ID": "gmp_git_agentskills_v1",
+            },
+            body: JSON.stringify({
+              input: `${q} ${cleanCity}`.trim(),
+            }),
+          });
+          if (gRes.ok) {
+            const gJson = await gRes.json();
+            if (gJson.suggestions && Array.isArray(gJson.suggestions)) {
+              for (const s of gJson.suggestions.slice(0, 6)) {
+                if (s.placePrediction) {
+                  const p = s.placePrediction;
+                  predictions.push({
+                    id: p.placeId || p.place,
+                    name: p.structuredFormat?.mainText?.text || p.text?.text,
+                    neighborhood: p.structuredFormat?.secondaryText?.text || cleanCity,
+                    city: cleanCity,
+                    type: "hotel",
+                    coords: { lat: 0, lng: 0 },
+                    address: p.text?.text,
+                  });
+                }
+              }
+            }
+          }
+        } catch (gErr) {
+          // Continue to fallback
+        }
+      }
+
+      // 2. OpenStreetMap Nominatim Search (Keyless worldwide coverage for hotels, neighborhoods, airbnbs)
+      if (predictions.length === 0) {
+        try {
+          const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=${encodeURIComponent(
+            `${q} ${cleanCity}`
+          )}`;
+          const nRes = await fetch(nomUrl, {
+            headers: { "User-Agent": "TravelScrapbookPlanner/1.0" },
+          });
+          if (nRes.ok) {
+            const nJson: any = await nRes.json();
+            if (Array.isArray(nJson)) {
+              for (const item of nJson) {
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lon);
+                const isLodging = item.type === "hotel" || item.type === "guest_house" || item.class === "tourism";
+                predictions.push({
+                  id: String(item.place_id || item.osm_id),
+                  name: item.name || item.display_name.split(",")[0],
+                  neighborhood: item.address?.neighbourhood || item.address?.suburb || item.address?.city_district || cleanCity,
+                  city: item.address?.city || cleanCity,
+                  type: isLodging ? "hotel" : "neighborhood",
+                  coords: { lat, lng },
+                  address: item.display_name,
+                });
+              }
+            }
+          }
+        } catch (nErr) {
+          // Handled gracefully
+        }
+      }
+
+      return res.json({ predictions });
+    } catch (err) {
+      console.error("Places autocomplete error:", err);
+      return res.json({ predictions: [] });
+    }
+  });
+
   // Memory cache for fetched landmark and place photos
   const photoCache = new Map<string, any>();
 
@@ -226,6 +314,10 @@ async function startServer() {
         specialRequirements = "",
         mustHaveInterests = [],
         avoidInterests = [],
+        homeBase = "",
+        homeBaseCoords,
+        morningDepartureTime = "09:00 AM",
+        eveningReturnTime = "10:00 PM",
       } = req.body;
 
       if (!destination || typeof destination !== "string" || !destination.trim()) {
@@ -249,6 +341,17 @@ Trip Preferences:
 ${mustHaveInterests.length > 0 ? `- HIGH PRIORITY MUST-HAVE EXPERIENCES (⭐): ${mustHaveInterests.join(", ")}` : ""}
 ${avoidInterests.length > 0 ? `- STRICTLY AVOID & FILTER OUT (✕): ${avoidInterests.join(", ")} (Do NOT suggest these types of venues/activities)` : ""}
 ${specialRequirements ? `- Special Notes/Requests: ${specialRequirements}` : ""}
+${homeBase ? `
+MANDATORY ANCHOR NODES & HARD ROUTING CONSTRAINTS:
+1. ANCHOR NODE A (Day Starting Point & Morning Departure):
+   - The traveler's accommodation / home base is: "${homeBase}".
+   - Morning Departure Time: STRICTLY ${morningDepartureTime}.
+   - Every single day MUST begin with the traveler departing from "${homeBase}" at ${morningDepartureTime}. The first activity or transit step must directly originate from this base.
+2. ANCHOR NODE Z (Day Concluding Point & Mandatory Transit Buffer):
+   - The traveler MUST walk through their accommodation door back at "${homeBase}" by no later than ${eveningReturnTime}.
+   - MANDATORY TRANSIT BUFFER: You MUST calculate realistic travel time from the final evening activity back to "${homeBase}" (via walking, metro, or taxi). The final activity must end early enough so they travel back and are safely inside ${homeBase} by ${eveningReturnTime}.
+   - End each day's schedule with a distinct concluding step: "Return to ${homeBase} & Evening Wind Down" scheduled around ${eveningReturnTime}.
+` : ""}
 
 CRITICAL REQUIREMENTS:
 1. Ground your recommendations in current real-world details using Google Search for ${destination}. Check real places, popular and top-rated restaurants, realistic transportation methods (subway lines, bus routes, walking times, train passes, airport transfers), opening hours, and practical tips.
@@ -410,6 +513,10 @@ You MUST respond with a single valid JSON object strictly matching this schema (
           dietary,
           interests,
           specialRequirements,
+          homeBase,
+          homeBaseCoords,
+          morningDepartureTime,
+          eveningReturnTime,
         });
 
         return res.json({
@@ -467,6 +574,10 @@ You MUST respond with a single valid JSON object strictly matching this schema (
             dietary,
             interests,
             specialRequirements,
+            homeBase,
+            homeBaseCoords,
+            morningDepartureTime,
+            eveningReturnTime,
           });
           return res.json({ success: true, plan: fallbackPlan });
         }
@@ -477,6 +588,10 @@ You MUST respond with a single valid JSON object strictly matching this schema (
       planData.createdAt = new Date().toISOString();
       if (startDate) planData.startDate = startDate;
       if (endDate) planData.endDate = endDate;
+      if (homeBase) planData.homeBase = homeBase;
+      if (homeBaseCoords) planData.homeBaseCoords = homeBaseCoords;
+      if (morningDepartureTime) planData.morningDepartureTime = morningDepartureTime;
+      if (eveningReturnTime) planData.eveningReturnTime = eveningReturnTime;
 
       if (planData && Array.isArray(planData.days)) {
         const photoPromises: Promise<any>[] = [];
@@ -538,6 +653,10 @@ You MUST respond with a single valid JSON object strictly matching this schema (
           dietary: req.body?.dietary || [],
           interests: req.body?.interests || [],
           specialRequirements: req.body?.specialRequirements || "",
+          homeBase: req.body?.homeBase || "",
+          homeBaseCoords: req.body?.homeBaseCoords,
+          morningDepartureTime: req.body?.morningDepartureTime || "09:00 AM",
+          eveningReturnTime: req.body?.eveningReturnTime || "10:00 PM",
         });
 
         return res.json({

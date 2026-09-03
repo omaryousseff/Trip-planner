@@ -48,7 +48,7 @@ export const MobileDeviceFrame: React.FC<MobileDeviceFrameProps> = ({
             </div>
           </div>
 
-          {/* Flutter App Bar */}
+          {/* Mobile App Bar */}
           <div className="bg-[#FF6B6B] text-white px-4 py-3.5 flex items-center justify-between shadow-xs shrink-0 z-20 border-b-2 border-[#EE5253]">
             <div className="flex items-center gap-2">
               <span className="text-base font-black uppercase tracking-tight truncate max-w-[200px]">{title}</span>
@@ -71,7 +71,7 @@ export const MobileDeviceFrame: React.FC<MobileDeviceFrameProps> = ({
             {children}
           </div>
 
-          {/* Flutter Material 3 Bottom Navigation Bar */}
+          {/* Mobile Bottom Navigation Bar */}
           <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-stone-200 py-2.5 px-6 flex items-center justify-around z-30 shadow-lg">
             {[
               { id: 'itinerary', label: 'Itinerary', icon: Compass },
@@ -105,7 +105,7 @@ export const MobileDeviceFrame: React.FC<MobileDeviceFrameProps> = ({
 
       <div className="mt-3 text-center text-xs text-stone-500 flex items-center gap-2">
         <Smartphone className="w-3.5 h-3.5" />
-        <span>Simulated Flutter Material 3 Mobile Preview</span>
+        <span>Mobile Companion Preview</span>
         <span>•</span>
         <button
           type="button"

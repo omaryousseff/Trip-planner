@@ -5,8 +5,6 @@ import {
   Sparkles, 
   RefreshCw, 
   Settings, 
-  Download, 
-  Smartphone, 
   Heart, 
   ShieldCheck, 
   Award,
@@ -21,8 +19,6 @@ interface ProfileViewProps {
   tripPlan: TripPlan;
   travelDNA: TravelDNA | null;
   onOpenDNAOnboarding: () => void;
-  onOpenFlutterExport: () => void;
-  onExportTripJson: () => void;
   onNewTrip: () => void;
 }
 
@@ -30,8 +26,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   tripPlan,
   travelDNA,
   onOpenDNAOnboarding,
-  onOpenFlutterExport,
-  onExportTripJson,
   onNewTrip,
 }) => {
   const destination = tripPlan.destination;
@@ -117,9 +111,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       {/* TRAVEL PROFILE & TRIP SETTINGS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="max-w-2xl mx-auto">
         {/* Active Trip Passport Sheet */}
-        <div className="postcard-card p-6 rounded-3xl space-y-4">
+        <div className="postcard-card p-6 sm:p-8 rounded-3xl space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-black text-[#2D241E] font-cozy-serif">
               Current Voyage Manifest
@@ -164,63 +158,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               className="w-full bg-[#FF7A59] hover:bg-[#FF6040] text-white text-xs font-black py-2.5 rounded-xl shadow-xs transition-all cursor-pointer border-b-2 border-[#E05030]"
             >
               Plan Another Journey
-            </button>
-          </div>
-        </div>
-
-        {/* Data & Cross-Platform Options */}
-        <div className="bg-[#FFFDF9] border-2 border-[#EFE5D8] p-6 rounded-3xl space-y-4 shadow-sm">
-          <h3 className="text-lg font-black text-[#2D241E] font-cozy-serif">
-            Scrapbook Sync & Exports
-          </h3>
-
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('medium');
-                onOpenFlutterExport();
-              }}
-              className="w-full p-3.5 bg-[#FAF4EA] hover:bg-[#F0E6D6] rounded-2xl border border-[#EFE5D8] flex items-center justify-between text-left transition-all cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#4ECDC4]/20 border border-[#4ECDC4]/40 flex items-center justify-center text-[#1A535C]">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black text-[#2D241E]">
-                    Export to Flutter Mobile App
-                  </h4>
-                  <p className="text-[10px] text-stone-500">
-                    Run on iPhone, Android, or Google Play
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-black text-[#FF7A59] group-hover:translate-x-1 transition-transform">→</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('light');
-                onExportTripJson();
-              }}
-              className="w-full p-3.5 bg-[#FAF4EA] hover:bg-[#F0E6D6] rounded-2xl border border-[#EFE5D8] flex items-center justify-between text-left transition-all cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#FFE17D]/30 border border-[#FFE17D] flex items-center justify-center text-[#996515]">
-                  <Download className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black text-[#2D241E]">
-                    Download Trip JSON Backup
-                  </h4>
-                  <p className="text-[10px] text-stone-500">
-                    Offline file with schedule & coordinates
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-black text-[#FF7A59] group-hover:translate-x-1 transition-transform">→</span>
             </button>
           </div>
         </div>

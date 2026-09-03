@@ -21,7 +21,8 @@ import {
   DayPlan, 
   ScheduleItem, 
   CategoryType, 
-  TimeSlot 
+  TimeSlot,
+  Coordinates
 } from '../types';
 import { 
   MapPin, 
@@ -42,7 +43,11 @@ import {
   Calendar,
   Share2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Sun,
+  Moon,
+  Footprints,
+  Hotel
 } from 'lucide-react';
 import { getLandmarkPhoto, LandmarkPhotoInfo } from '../utils/landmarkImages';
 import { getDirectionsUrl, getPlaceSearchUrl } from '../utils/geoCoordinates';
@@ -98,12 +103,19 @@ const SortableScrapbookItem: React.FC<SortableItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id });
+  } = useSortable({ 
+    id: item.id,
+    transition: {
+      duration: 350,
+      easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+    },
+  });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : 1,
+    transition: transition || 'transform 350ms cubic-bezier(0.25, 1, 0.5, 1)',
+    zIndex: isDragging ? 60 : 1,
+    touchAction: 'none',
   };
 
   const photoInfo = getLandmarkPhoto(item, destination);
@@ -143,8 +155,8 @@ const SortableScrapbookItem: React.FC<SortableItemProps> = ({
 
   return (
     <div ref={setNodeRef} style={style} className="relative mb-8 last:mb-2">
-      {/* Timeline Node Connector Point */}
-      <div className="absolute -left-[27px] sm:-left-[35px] top-6 z-20 flex items-center justify-center">
+      {/* Timeline Node Connector Point - Precision Centered */}
+      <div className="absolute -left-[32px] sm:-left-[40px] top-6 z-20 flex items-center justify-center">
         <button
           type="button"
           onClick={() => {
@@ -153,10 +165,10 @@ const SortableScrapbookItem: React.FC<SortableItemProps> = ({
             onToggleComplete(dayIndex, item.id);
           }}
           title={isCompleted ? 'Mark unvisited' : 'Stamp as visited!'}
-          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-3 flex items-center justify-center transition-all cursor-pointer shadow-md ${
+          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer shadow-md ${
             isCompleted
-              ? 'bg-[#285A34] border-[#285A34] text-white'
-              : 'bg-[#FFFDF9] border-[#2D241E] text-[#2D241E] hover:border-[#FF7A59]'
+              ? 'bg-[#285A34] border-[#285A34] text-white ring-2 ring-[#285A34]/20'
+              : 'bg-[#FFFDF9] border-[#2D241E] text-[#2D241E] hover:border-[#FF7A59] hover:bg-[#FFF5F2]'
           }`}
         >
           {isCompleted ? (
@@ -169,11 +181,17 @@ const SortableScrapbookItem: React.FC<SortableItemProps> = ({
 
       {/* ITEM PHYSICAL OBJECT (Sticky Note vs Polaroid vs Postcard) */}
       <motion.div
-        whileHover={{ scale: 1.015, y: -3 }}
+        layout="position"
+        transition={{
+          layout: { duration: 0.35, ease: [0.25, 1, 0.5, 1] },
+        }}
+        whileHover={{ scale: isDragging ? 1.03 : 1.015, y: isDragging ? 0 : -3 }}
         whileTap={{ scale: 0.99 }}
-        style={{ transform: `rotate(${isDragging ? 0 : naturalRotation}deg)` }}
-        className={`relative transition-shadow duration-200 ${
-          isDragging ? 'shadow-2xl opacity-90' : ''
+        style={{ transform: `rotate(${isDragging ? 1.5 : naturalRotation}deg)` }}
+        className={`relative transition-all duration-300 ${
+          isDragging 
+            ? 'shadow-2xl opacity-95 scale-[1.03] ring-4 ring-[#FF7A59]/70 rounded-2xl cursor-grabbing' 
+            : ''
         }`}
       >
         {/* ========================================================
@@ -526,6 +544,10 @@ interface ScheduleViewProps {
       tripAdvisorUrl?: string;
     }
   ) => void;
+  homeBase?: string;
+  homeBaseCoords?: Coordinates;
+  morningDepartureTime?: string;
+  eveningReturnTime?: string;
 }
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({
@@ -538,6 +560,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   onReorderItems,
   regeneratingItemId,
   onUpdateItemPhoto,
+  homeBase,
+  homeBaseCoords,
+  morningDepartureTime,
+  eveningReturnTime,
 }) => {
   const [selectedPhotoModal, setSelectedPhotoModal] = useState<{
     item: ScheduleItem;
@@ -557,6 +583,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const currentDay = days[activeDayIndex] || days[0];
   const items = currentDay.schedule;
+
+  const effectiveHomeBase = homeBase || (destination.includes('Tokyo') ? 'Hotel Gracery Shinjuku, Tokyo' : `${destination} Boutique Hotel`);
+  const effectiveMorning = morningDepartureTime || '08:30 AM';
+  const effectiveEvening = eveningReturnTime || '10:30 PM';
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -633,19 +663,82 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       </div>
 
       {/* ANIMATED VERTICAL TIMELINE CONTAINER */}
-      <div className="relative pl-7 sm:pl-10">
-        {/* Animated Drawing Route Line */}
-        <div className="absolute left-[13px] sm:left-[17px] top-4 bottom-8 w-1 bg-stone-300 -z-1 rounded-full overflow-hidden">
-          {/* Animated drawing ink bar */}
+      <div className="relative pl-8 sm:pl-12">
+        {/* Animated Drawing Route Line with Perfect Subpixel Alignment */}
+        <div className="absolute left-[14px] sm:left-[22px] top-6 bottom-10 w-1 bg-[#E8DEC8] z-0 rounded-full overflow-hidden shadow-inner">
+          {/* Animated drawing ink gradient bar (Morning Sunrise -> Coral Afternoon -> Twilight Navy) */}
           <motion.div
             initial={{ height: 0 }}
             animate={{ height: '100%' }}
             transition={{ duration: 1.2, ease: 'easeInOut' }}
-            className="w-full bg-gradient-to-b from-[#FF7A59] via-[#F59E0B] to-[#285A34]"
+            className="w-full bg-gradient-to-b from-[#D97706] via-[#FF7A59] to-[#3B82F6]"
           />
         </div>
 
-        {/* Drag & Drop Context */}
+        {/* ========================================================
+            NODE A: MORNING LAUNCH FROM HOME BASE (HOTEL / ACCOMMODATION)
+        ======================================================== */}
+        <div className="relative mb-8">
+          {/* Timeline Node Connector Point: Sun/Sunrise Icon */}
+          <div className="absolute -left-[32px] sm:-left-[40px] top-4 sm:top-5 z-20 flex items-center justify-center">
+            <div 
+              className="w-8 h-8 rounded-full border-2 border-[#D97706] bg-[#FFFBEB] text-[#B45309] flex items-center justify-center shadow-md ring-4 ring-[#FEF3C7]"
+              title={`Node A: Morning departure from ${effectiveHomeBase} at ${effectiveMorning}`}
+            >
+              <Sun className="w-4 h-4 text-[#D97706]" />
+            </div>
+          </div>
+
+          {/* Node A Physical Keycard / Luggage Tag */}
+          <div className="bg-[#FFFDF9] border-2 border-[#F3E3CE] rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden transition-all hover:border-[#E8BA7B]">
+            <div className="absolute -top-3 left-6 z-10">
+              <WashiTape color="amber" rotation={-2} />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pt-1">
+              <div className="flex items-center gap-2">
+                <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] text-[10px] sm:text-xs font-mono font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {effectiveMorning}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest bg-[#2D241E] text-[#FFFDF9] px-2 py-0.5 rounded-md">
+                  Node A • Departure
+                </span>
+              </div>
+              <span className="text-[10px] font-bold text-stone-500 font-mono">
+                ACCOMMODATION BASE
+              </span>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#FFF8E7] border border-[#F3E2B8] flex items-center justify-center shrink-0 text-xl shadow-2xs">
+                🏨
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-base sm:text-lg font-black text-[#2D241E] font-cozy-serif truncate">
+                  {effectiveHomeBase}
+                </h4>
+                <p className="text-xs text-stone-600 font-medium mt-0.5">
+                  Morning departure base • Step outside refreshed & ready for today's curated journey.
+                </p>
+              </div>
+            </div>
+
+            {items.length > 0 && (
+              <div className="mt-3 pt-2.5 border-t border-[#F2E8DC] flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                <span className="flex items-center gap-1.5 font-medium text-[11px] sm:text-xs">
+                  <Footprints className="w-3.5 h-3.5 text-[#FF7A59]" />
+                  <span>Transit buffer: ~15 mins travel to first stop ({items[0].title})</span>
+                </span>
+                <span className="font-mono text-[10px] font-bold bg-[#FAF4EA] text-stone-700 px-2 py-0.5 rounded border border-[#EFE5D8]">
+                  Node A ➔ Stop 1
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Drag & Drop Context for Schedule Items */}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -655,23 +748,90 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             items={items.map((i) => i.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div>
+            <div className="space-y-6">
               {items.map((item, idx) => (
-                <SortableScrapbookItem
-                  key={item.id}
-                  item={item}
-                  dayIndex={activeDayIndex}
-                  idx={idx}
-                  destination={destination}
-                  onToggleComplete={onToggleComplete}
-                  onRegenerateItem={onRegenerateItem}
-                  onOpenPhotoLightbox={(it, p) => setSelectedPhotoModal({ item: it, photoInfo: p })}
-                  regeneratingItemId={regeneratingItemId}
-                />
+                <React.Fragment key={item.id}>
+                  {idx > 0 && (
+                    <div className="flex items-center gap-2 py-1 px-3 -mt-3 mb-3 bg-[#FAF4EA]/90 backdrop-blur-xs border border-[#EFE5D8] rounded-full text-[11px] font-mono text-stone-600 w-fit shadow-2xs">
+                      <Navigation className="w-3 h-3 text-[#FF7A59]" />
+                      <span>~10–15 min stroll / transit to next stop</span>
+                    </div>
+                  )}
+                  <SortableScrapbookItem
+                    item={item}
+                    dayIndex={activeDayIndex}
+                    idx={idx}
+                    destination={destination}
+                    onToggleComplete={onToggleComplete}
+                    onRegenerateItem={onRegenerateItem}
+                    onOpenPhotoLightbox={(it, p) => setSelectedPhotoModal({ item: it, photoInfo: p })}
+                    regeneratingItemId={regeneratingItemId}
+                  />
+                </React.Fragment>
               ))}
             </div>
           </SortableContext>
         </DndContext>
+
+        {/* ========================================================
+            NODE Z: NIGHT RETREAT TO HOME BASE (HOTEL / ACCOMMODATION)
+        ======================================================== */}
+        <div className="relative mt-8">
+          {/* Timeline Node Connector Point: Moon Icon */}
+          <div className="absolute -left-[32px] sm:-left-[40px] top-4 sm:top-5 z-20 flex items-center justify-center">
+            <div 
+              className="w-8 h-8 rounded-full border-2 border-[#1E293B] bg-[#0F172A] text-[#FDE047] flex items-center justify-center shadow-md ring-4 ring-[#0F172A]/15"
+              title={`Node Z: Evening return to ${effectiveHomeBase} at ${effectiveEvening}`}
+            >
+              <Moon className="w-4 h-4 text-[#FDE047]" />
+            </div>
+          </div>
+
+          {/* Node Z Physical Evening Keycard */}
+          <div className="bg-[#1E242B] text-white border-2 border-[#333E4C] rounded-2xl p-4 sm:p-5 shadow-md relative overflow-hidden transition-all hover:border-[#52657C]">
+            <div className="absolute -top-3 right-6 z-10">
+              <WashiTape color="mint" rotation={3} />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pt-1">
+              <div className="flex items-center gap-2">
+                <span className="bg-[#0F172A] text-[#93C5FD] border border-[#1E3A8A] text-[10px] sm:text-xs font-mono font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-[#93C5FD]" />
+                  {effectiveEvening}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest bg-[#3B82F6] text-white px-2 py-0.5 rounded-md">
+                  Node Z • Return Base
+                </span>
+              </div>
+              <span className="text-[10px] font-bold text-stone-400 font-mono">
+                NIGHT RETREAT
+              </span>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#28323E] border border-[#3E4C5E] flex items-center justify-center shrink-0 text-xl shadow-2xs">
+                🌙
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-base sm:text-lg font-black text-white font-cozy-serif truncate">
+                  {effectiveHomeBase}
+                </h4>
+                <p className="text-xs text-stone-300 font-medium mt-0.5">
+                  Day expedition complete! Head back to your hotel base, record favorite moments in your journal, and recharge.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-stone-700/60 flex flex-wrap items-center justify-between gap-2 text-xs text-stone-400">
+              <span className="flex items-center gap-1.5 text-[11px] sm:text-xs text-stone-300">
+                <span>✨ Day {currentDay.dayNumber} itinerary completed • Rest well!</span>
+              </span>
+              <span className="font-mono text-[10px] font-bold bg-white/10 text-stone-300 px-2 py-0.5 rounded">
+                Node Z Anchor
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

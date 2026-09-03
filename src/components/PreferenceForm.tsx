@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { TripPreferences } from '../types';
+import { TripPreferences, Coordinates } from '../types';
 import { WashiTape } from './ScrapbookElements';
 import { triggerHaptic } from '../utils/haptics';
+import { HomeBaseKeycard } from './HomeBaseKeycard';
+import { DailyRhythmSlider } from './DailyRhythmSlider';
 import { 
   CuteStarMascot, 
   CozyCompass, 
@@ -415,6 +417,12 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
   const [travelerType, setTravelerType] = useState('Couple');
   const [budget, setBudget] = useState<'Budget' | 'Moderate' | 'Luxury'>('Moderate');
   const [pace, setPace] = useState<'Relaxed' | 'Balanced' | 'Fast'>('Balanced');
+
+  // Accommodation & Rhythm Anchor Nodes
+  const [homeBase, setHomeBase] = useState('');
+  const [homeBaseCoords, setHomeBaseCoords] = useState<Coordinates | undefined>(undefined);
+  const [morningDepartureTime, setMorningDepartureTime] = useState('09:00 AM');
+  const [eveningReturnTime, setEveningReturnTime] = useState('10:00 PM');
   
   // Tag states: 'none' | 'selected' | 'must-have' | 'avoid'
   const [tagStates, setTagStates] = useState<Record<string, TagStatus>>({
@@ -566,6 +574,10 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
       mustHaveInterests: mustHaves,
       avoidInterests: avoids,
       specialRequirements: combinedNotes,
+      homeBase: homeBase.trim(),
+      homeBaseCoords,
+      morningDepartureTime,
+      eveningReturnTime,
     });
   };
 
@@ -922,7 +934,18 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
           </div>
         </div>
 
-        {/* 6. "NUMBER OF TRAVELERS" WITH EMBOSSED STEPPER & PRESET PILLS */}
+        {/* 6. "HOME BASE" KEYCARD & LUGGAGE TAG (NODE A & NODE Z ANCHOR) */}
+        <HomeBaseKeycard
+          destination={destination || 'Tokyo, Japan'}
+          homeBase={homeBase}
+          homeBaseCoords={homeBaseCoords}
+          onSelectHomeBase={(name, coords) => {
+            setHomeBase(name);
+            setHomeBaseCoords(coords);
+          }}
+        />
+
+        {/* 7. "NUMBER OF TRAVELERS" WITH EMBOSSED STEPPER & PRESET PILLS */}
         <div className="cozy-card p-5 sm:p-7 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs sm:text-sm font-black text-[#3E3025] tracking-wider uppercase flex items-center gap-2">
@@ -1069,7 +1092,18 @@ export const PreferenceForm: React.FC<PreferenceFormProps> = ({
           </div>
         </div>
 
-        {/* 8. SPLIT PREFERENCE CATEGORIES (FOOD & DINING, CULTURE & DISCOVERY, ACTION & LEISURE) WITH CAROUSEL & WEIGHTED SELECTION */}
+        {/* 9. "THE DAILY RHYTHM SLIDER" (SUN & MOON DUAL-HANDLE DIAL) */}
+        <DailyRhythmSlider
+          pace={pace}
+          morningTime={morningDepartureTime}
+          eveningTime={eveningReturnTime}
+          onChange={(morning, evening) => {
+            setMorningDepartureTime(morning);
+            setEveningReturnTime(evening);
+          }}
+        />
+
+        {/* 10. SPLIT PREFERENCE CATEGORIES (FOOD & DINING, CULTURE & DISCOVERY, ACTION & LEISURE) WITH CAROUSEL & WEIGHTED SELECTION */}
         <div 
           className="cozy-card p-5 sm:p-7 space-y-5 relative overflow-hidden"
           onTouchStart={(e) => {

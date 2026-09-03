@@ -137,6 +137,10 @@ export interface TripPlan {
   createdAt?: string;
   quotaExceeded?: boolean;
   quotaNotice?: string;
+  homeBase?: string;
+  homeBaseCoords?: Coordinates;
+  morningDepartureTime?: string;
+  eveningReturnTime?: string;
 }
 
 export interface TripPreferences {
@@ -145,6 +149,10 @@ export interface TripPreferences {
   durationDays: number;
   startDate?: string;
   endDate?: string;
+  homeBase?: string;
+  homeBaseCoords?: Coordinates;
+  morningDepartureTime?: string;
+  eveningReturnTime?: string;
   travelersCount: number;
   travelerType: string;
   budget: BudgetLevel;

@@ -9,7 +9,6 @@ import { TransportationGuide } from './components/TransportationGuide';
 import { MapView } from './components/MapView';
 import { PackingAndPrepCard } from './components/PackingAndPrepCard';
 import { SearchGroundingSources } from './components/SearchGroundingSources';
-import { FlutterExportModal } from './components/FlutterExportModal';
 import { MobileDeviceFrame } from './components/MobileDeviceFrame';
 import { PhotoLightboxModal } from './components/PhotoLightboxModal';
 import { TravelDNAOnboarding, TRAVEL_ARCHETYPES } from './components/TravelDNAOnboarding';
@@ -84,7 +83,6 @@ export default function App() {
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isMobileDeviceView, setIsMobileDeviceView] = useState(false);
-  const [isFlutterModalOpen, setIsFlutterModalOpen] = useState(false);
   const [navigationTab, setNavigationTab] = useState<NavigationTab>('plan');
   const [regeneratingItemId, setRegeneratingItemId] = useState<string | null>(null);
 
@@ -531,6 +529,10 @@ export default function App() {
             onReorderItems={handleReorderItems}
             regeneratingItemId={regeneratingItemId}
             onUpdateItemPhoto={handleUpdateItemPhoto}
+            homeBase={tripPlan.homeBase}
+            homeBaseCoords={tripPlan.homeBaseCoords}
+            morningDepartureTime={tripPlan.morningDepartureTime}
+            eveningReturnTime={tripPlan.eveningReturnTime}
           />
 
           {/* Transit and Metro Passes Guide */}
@@ -626,24 +628,13 @@ export default function App() {
       );
     }
 
-    // 5. PROFILE: Travel DNA Archetype, Radar, and Export Controls
+    // 5. PROFILE: Travel DNA Archetype, Radar, and Voyage Manifest
     if (navigationTab === 'profile') {
       return (
         <ProfileView
           tripPlan={tripPlan}
           travelDNA={travelDNA}
           onOpenDNAOnboarding={() => setIsDnaModalOpen(true)}
-          onOpenFlutterExport={() => setIsFlutterModalOpen(true)}
-          onExportTripJson={() => {
-            triggerHaptic('medium');
-            const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(tripPlan, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute('href', dataStr);
-            downloadAnchor.setAttribute('download', `${tripPlan.destination.replace(/[^a-z0-9]/gi, '_')}_scrapbook.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-          }}
           onNewTrip={() => setNavigationTab('home')}
         />
       );
@@ -918,15 +909,6 @@ export default function App() {
           onSaveCustomPhoto={(newPhoto) => {
             handleUpdateItemPhoto(activeDayIndex, activePhotoLightbox.item.id, newPhoto);
           }}
-        />
-      )}
-
-      {/* FLUTTER EXPORT MODAL */}
-      {tripPlan && (
-        <FlutterExportModal
-          plan={tripPlan}
-          isOpen={isFlutterModalOpen}
-          onClose={() => setIsFlutterModalOpen(false)}
         />
       )}
     </div>
