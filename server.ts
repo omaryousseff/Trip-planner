@@ -172,13 +172,13 @@ async function startServer() {
       const cleanCity = destination.split(",")[0].trim();
 
       // 1. If Google Maps Platform API key is available in environment
-      if (process.env.GOOGLE_MAPS_API_KEY) {
+      if ((process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY)) {
         try {
           const gRes = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-Goog-Api-Key": process.env.GOOGLE_MAPS_API_KEY,
+              "X-Goog-Api-Key": (process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY),
               "X-Goog-Maps-Solution-ID": "gmp_git_agentskills_v1",
             },
             body: JSON.stringify({
@@ -253,14 +253,60 @@ async function startServer() {
   const photoCache = new Map<string, any>();
 
   async function fetchRealPlacePhoto(title: string, location?: string, city?: string) {
-    if (!title || typeof title !== 'string') return null;
-    const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
-    const cleanCity = (city || '').replace(/\([^)]*\)/g, '').trim();
-    // Strictly search: (place name city) for accurate place matching
+    if (!title || typeof title !== "string") return null;
+    const cleanTitle = title.replace(/\([^)]*\)/g, "").trim();
+    const cleanCity = (city || "").replace(/\([^)]*\)/g, "").trim();
     const cacheKey = `${cleanTitle.toLowerCase()}_${cleanCity.toLowerCase()}`;
 
     if (photoCache.has(cacheKey)) {
       return photoCache.get(cacheKey);
+    }
+
+    try {
+      if ((process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY)) {
+        const gRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": (process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY),
+            "X-Goog-FieldMask": "places.id,places.displayName,places.photos,places.websiteUri",
+            "X-Goog-Maps-Solution-ID": "gmp_git_agentskills_v1",
+          },
+          body: JSON.stringify({
+            textQuery: `${cleanTitle} ${location || ""} ${cleanCity}`.trim(),
+            maxResultCount: 1
+          }),
+        });
+        
+        if (gRes.ok) {
+          const gJson = await gRes.json();
+          if (gJson.places && gJson.places.length > 0 && gJson.places[0].photos && gJson.places[0].photos.length > 0) {
+            const place = gJson.places[0];
+            const photos = place.photos.slice(0, 3).map((p: any) => 
+              `https://places.googleapis.com/v1/${p.name}/media?maxHeightPx=800&maxWidthPx=1200&key=${(process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY)}`
+            );
+            
+            const result = {
+              url: photos[0],
+              caption: place.displayName?.text || cleanTitle,
+              source: "Google Maps",
+              sourceType: "official_website",
+              officialWebsiteUrl: place.websiteUri || undefined,
+              photos: photos,
+              alternativePhotos: photos.slice(1).map((url: string, i: number) => ({
+                url,
+                caption: `${place.displayName?.text || cleanTitle} - View ${i + 2}`,
+                source: "Google Maps",
+                sourceType: "official_website"
+              }))
+            };
+            photoCache.set(cacheKey, result);
+            return result;
+          }
+        }
+      }
+    } catch (err) {
+      console.log("Google Maps Places API photo fetch failed, falling back.");
     }
 
     try {
@@ -297,6 +343,21 @@ async function startServer() {
   }
 
   // API to generate complete Trip Plan with Google Search grounding
+  // API to fetch a real photo for a manually added place
+  app.get("/api/photo", async (req, res) => {
+    try {
+      const title = req.query.title;
+      const location = req.query.location || "";
+      const city = req.query.city || "";
+      if (!title) return res.status(400).json({ error: "Missing title" });
+      
+      const photo = await fetchRealPlacePhoto(String(title), String(location), String(city));
+      return res.json({ photo });
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to fetch photo" });
+    }
+  });
+
   app.post("/api/plan/generate", async (req, res) => {
     try {
       const {
@@ -610,41 +671,39 @@ You MUST respond with a single valid JSON object strictly matching this schema (
               item.googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.title} ${item.location || ''} ${planData.destination || destination}`.trim())}`;
 
               // Only scrape Pinterest for non-transit, non-lodging venues that aren't already verified landmarks
-              if (!photo.isVerifiedLandmark && item.category !== 'transport' && item.category !== 'lodging') {
-                photoPromises.push(
-                  fetchRealPlacePhoto(item.title, item.location, planData.destination || destination).then((live) => {
+              if (item.category !== 'transport' && item.category !== 'lodging') {
+                photoPromises.push(async () => {
+                  try {
+                    // Stagger requests to avoid DDG rate limit
+                    await new Promise(r => setTimeout(r, Math.random() * 2500));
+                    const live = await fetchRealPlacePhoto(item.title, item.location, planData.destination || destination);
                     if (live && live.url) {
                       item.imageUrl = live.url;
                       item.photoCaption = live.caption;
-                      item.photoSource = 'Pinterest';
-                      item.photoSourceType = 'pinterest';
-                      if (live.photos && live.photos.length > 0) {
-                        item.photos = live.photos;
-                      }
-                      if (live.alternativePhotos && live.alternativePhotos.length > 0) {
-                        item.alternativePhotos = live.alternativePhotos;
-                      }
+                      item.photoSource = live.source || 'Pinterest';
+                      item.photoSourceType = live.sourceType || 'pinterest';
+                      if (live.photos && live.photos.length > 0) item.photos = live.photos;
+                      if (live.alternativePhotos && live.alternativePhotos.length > 0) item.alternativePhotos = live.alternativePhotos;
                       if (live.officialWebsiteUrl && !item.officialWebsiteUrl) item.officialWebsiteUrl = live.officialWebsiteUrl;
                       if (live.tripAdvisorUrl && !item.tripAdvisorUrl) item.tripAdvisorUrl = live.tripAdvisorUrl;
                     }
-                  }).catch(() => {})
-                );
+                  } catch(e) {}
+                });
               }
             });
           }
         });
 
         if (photoPromises.length > 0) {
-          // Fast bounded wait (max 2500ms) so trip generation never gets stuck
-          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2500));
-          await Promise.race([Promise.allSettled(photoPromises), timeoutPromise]);
+          // Fast bounded wait
+          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 12000));
+          await Promise.race([Promise.allSettled(photoPromises.map(fn => fn())), timeoutPromise]);
         }
       }
 
       return res.json({ success: true, plan: planData });
     } catch (err: any) {
       console.log("Trip generation error caught, invoking safe fallback generator:", err?.message || err);
-      // Even in top-level catch (e.g. missing API key or client initialization error), deliver a curated trip plan!
       try {
         const fallbackPlan = generateFallbackTripPlan({
           destination: req.body?.destination || "Tokyo, Japan",
@@ -662,6 +721,40 @@ You MUST respond with a single valid JSON object strictly matching this schema (
           morningDepartureTime: req.body?.morningDepartureTime || "09:00 AM",
           eveningReturnTime: req.body?.eveningReturnTime || "10:00 PM",
         });
+
+        // Enrich the fallback plan with photos!
+        if (fallbackPlan && Array.isArray(fallbackPlan.days)) {
+          const photoPromises: any[] = [];
+          fallbackPlan.days.forEach((day: any) => {
+            if (Array.isArray(day.schedule)) {
+              day.schedule.forEach((item: any, idx: number) => {
+                item.coordinates = resolvePlaceCoordinates(item, fallbackPlan.destination || req.body?.destination, idx);
+                const photo = getLandmarkPhoto(item, fallbackPlan.destination || req.body?.destination);
+                item.imageUrl = photo.url;
+                item.photoCaption = photo.caption;
+                
+                if (item.category !== "transport" && item.category !== "lodging") {
+                  photoPromises.push(async () => {
+                    try {
+                      await new Promise(r => setTimeout(r, Math.random() * 2500));
+                      const live = await fetchRealPlacePhoto(item.title, item.location, fallbackPlan.destination || req.body?.destination);
+                      if (live && live.url) {
+                        item.imageUrl = live.url;
+                        item.photoSource = live.source || "Pinterest";
+                        item.photoSourceType = live.sourceType || "pinterest";
+                      }
+                    } catch(e) {}
+                  });
+                }
+              });
+            }
+          });
+          
+          if (photoPromises.length > 0) {
+            const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 12000));
+            await Promise.race([Promise.allSettled(photoPromises.map(fn => fn())), timeoutPromise]);
+          }
+        }
 
         return res.json({
           success: true,
