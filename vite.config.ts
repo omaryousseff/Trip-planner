@@ -14,9 +14,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'Travel Scrapbook',
-          short_name: 'Scrapbook',
-          description: 'A cozy travel planner and scrapbook',
+          name: 'Trip Planner',
+          short_name: 'Trip Planner',
+          description: 'Personalized trip planning app that creates detailed schedules with transportation, food places, attractions, and activities based on occasion, group size, and travel preferences.',
           theme_color: '#FAF5EC',
           background_color: '#FAF5EC',
           display: 'standalone',
@@ -47,7 +47,7 @@ export default defineConfig(() => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         },
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: 'module',
         },
       })
