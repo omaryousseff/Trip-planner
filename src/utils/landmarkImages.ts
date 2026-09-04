@@ -625,7 +625,7 @@ export function getLandmarkPhoto(
 
   // 1. Direct Famous Landmark Match with authentic official website & TripAdvisor source
   for (const [key, photo] of Object.entries(FAMOUS_LANDMARKS_PHOTOS)) {
-    if (combinedText.includes(key)) {
+    if (titleLower.includes(key)) {
       const allUrls = [photo.url, ...(photo.photos || []), ...(photo.alternativePhotos || []).map((p) => p.url)].filter((u, i, arr) => arr.indexOf(u) === i).slice(0, 3);
       return {
         url: photo.url,

@@ -145,8 +145,9 @@ export const HomeBaseKeycard: React.FC<HomeBaseKeycardProps> = ({
       // Also call server autocomplete for worldwide places / hotels / addresses
       try {
         setIsLoading(true);
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || "";
         const res = await fetch(
-          `/api/places-autocomplete?q=${encodeURIComponent(query)}&destination=${encodeURIComponent(destination)}`
+          `${baseUrl}/api/places-autocomplete?q=${encodeURIComponent(query)}&destination=${encodeURIComponent(destination)}`
         );
         if (res.ok) {
           const data = await res.json();

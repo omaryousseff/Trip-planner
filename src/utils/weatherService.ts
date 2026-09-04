@@ -274,8 +274,9 @@ export async function fetch5DayWeatherForecast(
 
   // Tier 1: Try server API route
   try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "";
     const res = await fetch(
-      `/api/weather?destination=${encodeURIComponent(cleanDest)}&startDate=${encodeURIComponent(safeStart)}`
+      `${baseUrl}/api/weather?destination=${encodeURIComponent(cleanDest)}&startDate=${encodeURIComponent(safeStart)}`
     );
     if (res.ok) {
       const data: FiveDayWeatherForecastData = await res.json();

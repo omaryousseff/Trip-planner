@@ -11,52 +11,84 @@ interface InteractiveMapProps {
 
 function Directions({ items, travelMode }: { items: InteractiveMapProps['items'], travelMode: string }) {
   const map = useMap();
-  const routesLibrary = useMapsLibrary('routes');
-  const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService>();
-  const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer>();
+  const geometryLib = useMapsLibrary('geometry');
+  const [polyline, setPolyline] = useState<google.maps.Polyline | null>(null);
 
   useEffect(() => {
-    if (!routesLibrary || !map) return;
-    setDirectionsService(new routesLibrary.DirectionsService());
-    setDirectionsRenderer(new routesLibrary.DirectionsRenderer({ 
-      map,
-      suppressMarkers: true,
-      polylineOptions: {
-        strokeColor: '#FF7A59',
-        strokeWeight: 4,
-        strokeOpacity: 0.8
-      }
-    }));
-  }, [routesLibrary, map]);
-
-  useEffect(() => {
-    if (!directionsService || !directionsRenderer || items.length < 2) {
-      if (directionsRenderer) directionsRenderer.setDirections(null);
+    if (!map || !geometryLib || items.length < 2) {
+      if (polyline) polyline.setMap(null);
       return;
     }
 
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return;
+
+    let apiTravelMode = 'WALK';
+    if (travelMode === 'driving') apiTravelMode = 'DRIVE';
+    if (travelMode === 'transit') apiTravelMode = 'TRANSIT';
+
     const origin = items[0].resolvedCoords;
     const destination = items[items.length - 1].resolvedCoords;
-    const waypoints = items.slice(1, -1).map(item => ({
-      location: item.resolvedCoords,
-      stopover: true
+    const intermediates = items.slice(1, -1).map(item => ({
+      location: { latLng: { latitude: item.resolvedCoords.lat, longitude: item.resolvedCoords.lng } }
     }));
 
-    let googleTravelMode = google.maps.TravelMode.WALKING;
-    if (travelMode === 'driving') googleTravelMode = google.maps.TravelMode.DRIVING;
-    if (travelMode === 'transit') googleTravelMode = google.maps.TravelMode.TRANSIT;
+    const body = {
+      origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+      destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+      intermediates,
+      travelMode: apiTravelMode
+    };
 
-    directionsService.route({
-      origin,
-      destination,
-      waypoints,
-      travelMode: googleTravelMode
-    }).then(response => {
-      directionsRenderer.setDirections(response);
-    }).catch(e => {
-      console.warn("Directions request failed:", e);
-    });
-  }, [directionsService, directionsRenderer, items, travelMode]);
+    let active = true;
+
+    fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'routes.polyline.encodedPolyline'
+      },
+      body: JSON.stringify(body)
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (!active) return;
+      if (data.routes && data.routes.length > 0 && data.routes[0].polyline) {
+        const encodedPath = data.routes[0].polyline.encodedPolyline;
+        const path = geometryLib.encoding.decodePath(encodedPath);
+        
+        if (polyline) {
+          polyline.setPath(path);
+        } else {
+          const newPolyline = new google.maps.Polyline({
+            path,
+            map,
+            strokeColor: '#FF7A59',
+            strokeWeight: 4,
+            strokeOpacity: 0.8
+          });
+          setPolyline(newPolyline);
+        }
+      } else {
+        if (polyline) polyline.setPath([]);
+      }
+    })
+    .catch(e => console.warn('Routes API failed:', e));
+
+    return () => {
+      active = false;
+    };
+  }, [map, geometryLib, items, travelMode]);
+
+  // Clean up polyline on unmount
+  useEffect(() => {
+    return () => {
+      if (polyline) {
+        polyline.setMap(null);
+      }
+    };
+  }, [polyline]);
 
   return null;
 }

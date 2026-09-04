@@ -1,88 +1,56 @@
-# 🗺️ Trip Planner (Flutter & Web)
+# 🗺️ AI Trip Planner
 
-An AI-powered travel planner and itinerary companion featuring Pinterest place photography, customizable schedules, and turn-by-turn navigation.
+An AI-powered travel planner and itinerary companion featuring Pinterest place photography, interactive Google Maps routes, customizable schedules, and turn-by-turn navigation.
 
 ---
 
-## 🚀 How to Build the Android APK on GitHub (Zero Local Setup)
+## 🚀 How to Build the Android APK on GitHub Actions
 
-This repository is pre-configured with **GitHub Actions** (`.github/workflows/build-apk.yml`) to automatically compile and release an Android APK in the cloud.
+This repository includes a ready-to-use **GitHub Actions** workflow (`.github/workflows/build-apk.yml`) to automatically compile a fully functional Android APK in the cloud with zero local Android Studio setup.
 
 ### Step 1: Export or Push to GitHub
-- In Google AI Studio: Click the **Settings** / menu at the top right and select **Export to GitHub** (or push your repository to GitHub using git).
+- In Google AI Studio: Click the **Settings** / menu at the top right and select **Export to GitHub** (or push your repository to GitHub using `git`).
 
-### Step 2: Run the Workflow
+### Step 2: (Optional) Set Secrets or Inputs
+If your app makes calls to your deployed backend or Google Maps:
+1. On GitHub, go to **Settings** > **Secrets and variables** > **Actions**.
+2. Add secrets:
+   - `VITE_API_BASE_URL`: (Optional) Your hosted backend URL (e.g., `https://your-cloud-run-service.run.app`).
+   - `VITE_GOOGLE_MAPS_API_KEY`: Your Google Maps Platform API key.
+
+### Step 3: Run the Workflow
 1. Navigate to your repository on **GitHub**.
 2. Click the **Actions** tab at the top.
-3. In the left sidebar, click **Build Flutter APK**.
-4. Click **Run workflow** > Select `release` > Click **Run workflow**.
-   *(Note: The workflow also runs automatically whenever you push code).*
+3. In the left sidebar, select **Build Android APK**.
+4. Click **Run workflow** (optionally input your backend API URL).
+*(Note: The workflow also runs automatically whenever you push to `main` or `master`).*
 
-### Step 3: Download your APK
-1. When the run finishes (green checkmark, ~2 minutes), click on the workflow run.
-2. Scroll to the **Artifacts** section at the bottom.
-3. Click **TripPlanner-release-apk** to download `app-release.apk` directly to your phone or computer!
+### Step 4: Download Your APK
+1. When the build finishes (green checkmark, ~2-3 minutes), click on the completed workflow run.
+2. Scroll down to the **Artifacts** section at the bottom.
+3. Download **AI-Trip-Planner-Debug-APK** and transfer the `.apk` file to your Android device to install!
 
 ---
 
 ## 💻 Building the APK Locally
 
-If you have Flutter installed locally:
+If you have Android Studio / Android SDK installed locally:
 
 ```bash
-# 1. Clone the repository
-git clone <your-repo-url>
-cd <repo-name>
+# 1. Install dependencies
+npm install
 
-# 2. Install dependencies
-flutter pub get
+# 2. Build the web app
+npm run build
 
-# 3. Build release APK
-flutter build apk --release
+# 3. Add Android platform (first time only)
+npx cap add android
 
-# 4. Your APK will be at:
-# build/app/outputs/flutter-apk/app-release.apk
+# 4. Sync assets into Android
+npx cap sync android
+
+# 5. Open Android project in Android Studio or compile with Gradle:
+npx cap open android
+# Or directly via CLI:
+cd android && ./gradlew assembleDebug
 ```
-
----
-
-## 📁 Flutter Project Structure
-
-```text
-├── .github/
-│   └── workflows/
-│       └── build-apk.yml       # Automated GitHub Actions CI/CD to build APK
-├── pubspec.yaml                # Flutter project specifications & dependencies
-├── android/                    # Android project wrapper & permissions
-│   ├── app/
-│   │   ├── build.gradle
-│   │   └── src/main/AndroidManifest.xml
-│   ├── build.gradle
-│   └── settings.gradle
-├── lib/
-│   ├── main.dart               # App entry point & bottom navigation shell
-│   ├── models/
-│   │   └── trip_models.dart    # TripPlan, DayPlan, ScheduleItem, Cost models
-│   ├── theme/
-│   │   └── app_theme.dart      # Material 3 theme & color schemes
-│   ├── widgets/
-│   │   ├── polaroid_card.dart  # Polaroid card with top 3 Pinterest photos carousel
-│   │   └── photo_lightbox.dart # High-res photo viewer with zoom & Pinterest link
-│   ├── screens/
-│   │   ├── itinerary_screen.dart # Day tabs, timeline, and category filters
-│   │   ├── companion_screen.dart # Live next-stop companion & directions
-│   │   ├── planner_screen.dart   # Interactive trip generation form
-│   │   └── github_build_guide_screen.dart # In-app guide for GitHub APK build
-│   └── services/
-│       └── trip_data_service.dart # Local storage & sample data
-```
-
----
-
-## ✨ Features
-
-- **Pinterest Landmark Photography**: Curates the best 3 photos for every attraction and dining stop with swipeable photo carousels, photo counter badges, and attribution.
-- **Interactive Daily Itinerary**: Multi-day schedule with category filters (Places, Dining, Activities, Transport).
-- **Offline Local Storage**: Saves itineraries locally on the device using `shared_preferences`.
-- **Navigation Integration**: Quick tap launches Google Maps or Apple Maps with pre-filled destination query.
-- **Smart Packing List & Budget Breakdown**: Tailored recommendations for every trip.

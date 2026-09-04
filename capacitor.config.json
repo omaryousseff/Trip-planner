@@ -1,0 +1,9 @@
+{
+  "appId": "com.aitripplanner.app",
+  "appName": "AI Trip Planner",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

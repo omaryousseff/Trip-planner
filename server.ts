@@ -525,9 +525,9 @@ You MUST respond with a single valid JSON object strictly matching this schema (
       // 2. gemini-3.8-flash (complex reasoning fallback)
       // 3. gemini-flash-latest (resilient alias fallback)
       const attempts = [
-        { model: "gemini-3.1-flash-lite" },
-        { model: "gemini-3.8-flash" },
-        { model: "gemini-flash-latest" },
+        { model: "gemini-1.5-flash" },
+        { model: "gemini-2.0-flash" },
+        { model: "gemini-1.5-pro" },
       ];
 
       let response: any = null;
@@ -655,7 +655,7 @@ You MUST respond with a single valid JSON object strictly matching this schema (
       if (eveningReturnTime) planData.eveningReturnTime = eveningReturnTime;
 
       if (planData && Array.isArray(planData.days)) {
-        const photoPromises: Promise<any>[] = [];
+        const photoPromises: any[] = [];
         planData.days.forEach((day: any) => {
           if (Array.isArray(day.schedule)) {
             day.schedule.forEach((item: any, idx: number) => {
@@ -696,8 +696,8 @@ You MUST respond with a single valid JSON object strictly matching this schema (
 
         if (photoPromises.length > 0) {
           // Fast bounded wait
-          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 12000));
-          await Promise.race([Promise.allSettled(photoPromises.map(fn => fn())), timeoutPromise]);
+          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 25000));
+          await Promise.race([Promise.allSettled(photoPromises.map(fn => typeof fn === 'function' ? fn() : fn)), timeoutPromise]);
         }
       }
 
@@ -751,8 +751,8 @@ You MUST respond with a single valid JSON object strictly matching this schema (
           });
           
           if (photoPromises.length > 0) {
-            const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 12000));
-            await Promise.race([Promise.allSettled(photoPromises.map(fn => fn())), timeoutPromise]);
+            const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 25000));
+            await Promise.race([Promise.allSettled(photoPromises.map(fn => typeof fn === 'function' ? fn() : fn)), timeoutPromise]);
           }
         }
 
@@ -797,7 +797,7 @@ Provide a single JSON object matching:
   "transportDetail": { "mode": "subway", "route": "Line 2", "duration": "15m", "cost": "$2" }
 }`;
 
-        const modelList = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+        const modelList = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
         for (const mod of modelList) {
           try {
             const response = await ai.models.generateContent({

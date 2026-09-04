@@ -199,7 +199,8 @@ export default function App() {
     setError(null);
 
     try {
-      const response = await fetch('/api/plan/generate', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "";
+      const response = await fetch(`${baseUrl}/api/plan/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(preferences),
@@ -287,7 +288,8 @@ export default function App() {
     setRegeneratingItemId(item.id);
 
     try {
-      const response = await fetch('/api/plan/regenerate-item', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "";
+      const response = await fetch(`${baseUrl}/api/plan/regenerate-item`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
