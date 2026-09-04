@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="#FAF5EC"/>
+  
+  <!-- Stamp border -->
+  <path d="M 120 120 L 392 120 L 392 392 L 120 392 Z" stroke="#FF7A59" stroke-width="12" stroke-dasharray="24 24" stroke-linecap="round" fill="none" />
+  
+  <!-- Sparkles -->
+  <path d="M256 160 C 256 210, 210 256, 160 256 C 210 256, 256 302, 256 352 C 256 302, 302 256, 352 256 C 302 256, 256 210, 256 160 Z" fill="#FF7A59" />
+  
+  <path d="M360 160 C 360 180, 380 200, 400 200 C 380 200, 360 220, 360 240 C 360 220, 340 200, 320 200 C 340 200, 360 180, 360 160 Z" fill="#4ECDC4" />
+</svg>

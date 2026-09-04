@@ -12,7 +12,8 @@ import {
   Check, 
   RefreshCw,
   Camera,
-  Heart
+  Heart,
+  X
 } from 'lucide-react';
 import { TravelDNA, TravelArchetype } from '../types';
 import { WashiTape, PushPin, PassportStamp, triggerStampCelebration } from './ScrapbookElements';
@@ -78,16 +79,20 @@ export const TRAVEL_ARCHETYPES: TravelArchetype[] = [
 
 interface TravelDNAOnboardingProps {
   initialDNA?: TravelDNA | null;
-  onSaveDNA: (dna: TravelDNA) => void;
+  onSaveDNA?: (dna: TravelDNA) => void;
+  onComplete?: (dna: TravelDNA) => void;
   onClose?: () => void;
+  onCancel?: () => void;
   isModal?: boolean;
 }
 
 export const TravelDNAOnboarding: React.FC<TravelDNAOnboardingProps> = ({
   initialDNA,
   onSaveDNA,
+  onComplete,
   onClose,
-  isModal = false,
+  onCancel,
+  isModal = true,
 }) => {
   const [step, setStep] = useState<'archetype' | 'sensory' | 'rhythm' | 'result'>(
     initialDNA ? 'result' : 'archetype'
@@ -123,19 +128,36 @@ export const TravelDNAOnboarding: React.FC<TravelDNAOnboardingProps> = ({
       passions: activeArchetype.dominantTraits,
       collectedStampsCount: initialDNA?.collectedStampsCount || 1,
     };
-    onSaveDNA(dna);
+    if (onSaveDNA) onSaveDNA(dna);
+    if (onComplete) onComplete(dna);
     setStep('result');
   };
 
-  return (
-    <div className={`relative w-full ${isModal ? 'max-w-2xl mx-auto bg-[#FFFDF9] rounded-3xl p-6 sm:p-8 shadow-2xl border-4 border-[#2D241E]' : ''}`}>
+  const handleDismiss = () => {
+    if (onClose) onClose();
+    if (onCancel) onCancel();
+  };
+
+  const modalBody = (
+    <div className={`relative w-full ${isModal ? 'max-w-2xl mx-auto bg-[#FFFDF9] rounded-3xl p-6 sm:p-8 shadow-2xl border-4 border-[#2D241E] my-auto max-h-[90vh] overflow-y-auto overscroll-contain' : ''}`}>
       {/* Tape & Pin decorations */}
-      <div className="absolute -top-3 left-8 z-10">
+      <div className="absolute -top-3 left-8 z-10 pointer-events-none">
         <WashiTape color="coral" rotation={-3} />
       </div>
-      <div className="absolute -top-3 right-10 z-10">
+      <div className="absolute -top-3 right-12 z-10 pointer-events-none">
         <WashiTape color="mint" rotation={4} />
       </div>
+
+      {isModal && (
+        <button
+          type="button"
+          onClick={handleDismiss}
+          className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 transition-colors cursor-pointer"
+          title="Close dialog"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
 
       <AnimatePresence mode="wait">
         {step === 'archetype' && (
@@ -549,10 +571,10 @@ export const TravelDNAOnboarding: React.FC<TravelDNAOnboardingProps> = ({
                     <span>Recalibrate DNA</span>
                   </button>
 
-                  {onClose && (
+                  {(onClose || onCancel) && (
                     <button
                       type="button"
-                      onClick={onClose}
+                      onClick={handleDismiss}
                       className="bg-[#2D241E] hover:bg-black text-white text-xs font-black px-5 py-2.5 rounded-xl transition-all cursor-pointer shadow-sm"
                     >
                       Apply & Return to Scrapbook
@@ -566,4 +588,19 @@ export const TravelDNAOnboarding: React.FC<TravelDNAOnboardingProps> = ({
       </AnimatePresence>
     </div>
   );
+
+  if (isModal) {
+    return (
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/65 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) handleDismiss();
+        }}
+      >
+        {modalBody}
+      </div>
+    );
+  }
+
+  return modalBody;
 };

@@ -240,7 +240,7 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
     ],
   },
   'meiji': {
-    url: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=1200&q=80',
+    url: 'https://images.unsplash.com/photo-1583089892943-e02e5b017b6a?auto=format&fit=crop&w=1200&q=80',
     caption: 'Meiji Jingu Shrine & Forest, Harajuku',
     source: 'Official Shrine Website (meijijingu.or.jp)',
     sourceType: 'official_website',
@@ -458,7 +458,7 @@ const FAMOUS_LANDMARKS_PHOTOS: Record<string, LandmarkData> = {
     tripAdvisorUrl: 'https://www.tripadvisor.com/Attraction_Review-g298564-d321402-Reviews-Kinkaku_ji_Temple-Kyoto_Kyoto_Prefecture_Kinki.html',
   },
   'arashiyama': {
-    url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80',
+    url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1200&q=80',
     caption: 'Arashiyama Sagano Bamboo Grove, Kyoto',
     source: 'Kyoto Tourism Official Archive (kyoto.travel)',
     sourceType: 'tourism_board',

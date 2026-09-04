@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   MapPin, 
@@ -94,6 +94,15 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
   const [customUrl, setCustomUrl] = useState('');
   const [customSource, setCustomSource] = useState('Official Website');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Lock background scrolling when modal is active
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
 
   const walkingDirectionsUrl = getDirectionsUrl({
     destinationTitle: item.title,
@@ -204,7 +213,7 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
         </div>
 
         {/* High-Resolution Embedded Photo Canvas */}
-        <div className="relative w-full h-72 sm:h-96 md:h-[420px] bg-stone-950 shrink-0 overflow-hidden flex items-center justify-center">
+        <div className="relative w-full h-52 sm:h-80 md:h-[380px] bg-stone-950 shrink-0 overflow-hidden flex items-center justify-center">
           <img
             src={currentPhoto.url}
             alt={currentPhoto.caption || item.title}
@@ -290,7 +299,7 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 overscroll-contain flex-1">
           
           {/* Stated Source and Attribution Info Card */}
           <div className="bg-[#FAF4EA] border-2 border-[#EFE5D8] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

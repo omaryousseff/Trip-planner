@@ -609,31 +609,35 @@ You MUST respond with a single valid JSON object strictly matching this schema (
               item.alternativePhotos = photo.alternativePhotos;
               item.googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.title} ${item.location || ''} ${planData.destination || destination}`.trim())}`;
 
-              // Concurrently fetch authentic real landmark photo from Pinterest (place name city)
-              photoPromises.push(
-                fetchRealPlacePhoto(item.title, item.location, planData.destination || destination).then((live) => {
-                  if (live && live.url) {
-                    item.imageUrl = live.url;
-                    item.photoCaption = live.caption;
-                    item.photoSource = 'Pinterest';
-                    item.photoSourceType = 'pinterest';
-                    if (live.photos && live.photos.length > 0) {
-                      item.photos = live.photos;
+              // Only scrape Pinterest for non-transit, non-lodging venues that aren't already verified landmarks
+              if (!photo.isVerifiedLandmark && item.category !== 'transport' && item.category !== 'lodging') {
+                photoPromises.push(
+                  fetchRealPlacePhoto(item.title, item.location, planData.destination || destination).then((live) => {
+                    if (live && live.url) {
+                      item.imageUrl = live.url;
+                      item.photoCaption = live.caption;
+                      item.photoSource = 'Pinterest';
+                      item.photoSourceType = 'pinterest';
+                      if (live.photos && live.photos.length > 0) {
+                        item.photos = live.photos;
+                      }
+                      if (live.alternativePhotos && live.alternativePhotos.length > 0) {
+                        item.alternativePhotos = live.alternativePhotos;
+                      }
+                      if (live.officialWebsiteUrl && !item.officialWebsiteUrl) item.officialWebsiteUrl = live.officialWebsiteUrl;
+                      if (live.tripAdvisorUrl && !item.tripAdvisorUrl) item.tripAdvisorUrl = live.tripAdvisorUrl;
                     }
-                    if (live.alternativePhotos && live.alternativePhotos.length > 0) {
-                      item.alternativePhotos = live.alternativePhotos;
-                    }
-                    if (live.officialWebsiteUrl) item.officialWebsiteUrl = live.officialWebsiteUrl;
-                    if (live.tripAdvisorUrl) item.tripAdvisorUrl = live.tripAdvisorUrl;
-                  }
-                }).catch(() => {})
-              );
+                  }).catch(() => {})
+                );
+              }
             });
           }
         });
 
         if (photoPromises.length > 0) {
-          await Promise.allSettled(photoPromises);
+          // Fast bounded wait (max 2500ms) so trip generation never gets stuck
+          const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2500));
+          await Promise.race([Promise.allSettled(photoPromises), timeoutPromise]);
         }
       }
 
@@ -765,12 +769,30 @@ Provide a single JSON object matching:
   // Dedicated endpoint to fetch place/landmark photography from Pinterest
   app.get("/api/place-photo", async (req, res) => {
     try {
-      const query = (req.query.query as string) || "";
+      const query = ((req.query.query || req.query.place || req.query.q) as string || "").trim();
       const city = (req.query.city as string) || "";
       const location = (req.query.location as string) || "";
 
       if (!query) {
         return res.status(400).json({ error: "Place query parameter is required." });
+      }
+
+      // Check verified landmark first
+      const curated = getLandmarkPhoto({ title: query, location }, city);
+      if (curated.isVerifiedLandmark) {
+        return res.json({
+          success: true,
+          photo: {
+            url: curated.url,
+            caption: curated.caption,
+            source: curated.source,
+            sourceType: curated.sourceType,
+            officialWebsiteUrl: curated.officialWebsiteUrl,
+            tripAdvisorUrl: curated.tripAdvisorUrl,
+            alternativePhotos: curated.alternativePhotos,
+            googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${query} ${location} ${city}`.trim())}`
+          }
+        });
       }
 
       const livePhoto = await fetchRealPlacePhoto(query, location, city);
@@ -779,13 +801,15 @@ Provide a single JSON object matching:
       }
 
       // High-res curated fallback
-      const fallbackPhoto = getLandmarkPhoto({ title: query, location }, city);
       return res.json({
         success: true,
         photo: {
-          url: fallbackPhoto.url,
-          caption: fallbackPhoto.caption,
-          source: fallbackPhoto.isVerifiedLandmark ? "Verified Landmark Archive" : "Curated Travel Photography",
+          url: curated.url,
+          caption: curated.caption,
+          source: curated.source,
+          sourceType: curated.sourceType,
+          officialWebsiteUrl: curated.officialWebsiteUrl,
+          tripAdvisorUrl: curated.tripAdvisorUrl,
           googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${query} ${location} ${city}`.trim())}`
         }
       });

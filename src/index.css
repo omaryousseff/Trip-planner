@@ -1,11 +1,31 @@
 @import "tailwindcss";
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     background-color: #FBF6EE;
     color: #2D2723;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    overflow-x: clip;
+    min-height: 100vh;
   }
+}
+
+/* Enable momentum-based smooth touch scrolling across iOS and touch devices */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Utility to hide scrollbars while preserving full scrollability */
+.scrollbar-none, .no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 .font-cozy-serif {

@@ -52,17 +52,56 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * Promotes lower-resolution Pinterest CDN thumbnails (236x, 474x, 564x)
- * to high-definition 736x or originals for crisp display on polaroids and Retina displays.
+ * to high-definition 736x for crisp, universally reliable display without 403 errors.
  */
 export function getHighResPinterestUrl(url: string): string {
   if (!url || typeof url !== 'string') return url;
   if (!url.includes('pinimg.com')) return url;
 
-  // Upgrade 236x, 474x, 564x to 736x
+  // Upgrade 236x, 474x, 564x to 736x (736x is universally accessible without 403 Forbidden)
   return url
     .replace(/\/236x\//, '/736x/')
     .replace(/\/474x\//, '/736x/')
     .replace(/\/564x\//, '/736x/');
+}
+
+/**
+ * Extracts a clean, specific venue or landmark name from activity titles.
+ * Strips action verbs ("Visit", "Explore", "Dinner at", etc.) so Pinterest searches
+ * are strictly accurate to the actual place.
+ */
+export function cleanPlaceName(rawTitle: string): string {
+  if (!rawTitle || typeof rawTitle !== 'string') return '';
+  let clean = rawTitle.replace(/\([^)]*\)/g, '').trim();
+
+  const prefixes = [
+    /^(visit|explore|discover|tour of|tour|stop at|stop by|wander around|stroll through|walk around|stroll along|scenic walk along|check-in at|check into|arrive at|departure from|head to|head towards)\s+/i,
+    /^(breakfast at|lunch at|dinner at|coffee at|drinks at|tea at|tasting at|dine at|relax at|eat at|snack at)\s+/i,
+    /^(morning walk in|evening stroll at|afternoon at|night out in|sunrise hike at|sunset from|sunrise at)\s+/i,
+    /^(take the|ride the|board the|train to|subway to|metro to|bus to)\s+/i,
+  ];
+
+  for (const p of prefixes) {
+    clean = clean.replace(p, '').trim();
+  }
+
+  return clean;
+}
+
+/**
+ * Detects generic or non-specific activities that should NOT be searched on Pinterest
+ * (e.g. hotel check-in, unpack, subway transit) to prevent inaccurate random imagery.
+ */
+export function isGenericPlace(title: string): boolean {
+  if (!title || title.length < 3) return true;
+  const lower = title.toLowerCase().trim();
+  const genericWords = [
+    'hotel', 'accommodation', 'hostel', 'resort', 'check in', 'check-in', 'checkout', 'check out',
+    'rest', 'relax', 'unpack', 'pack bags', 'airport', 'flight', 'arrival', 'departure',
+    'subway', 'metro', 'train station', 'bus station', 'transit', 'transfer',
+    'breakfast', 'lunch', 'dinner', 'free time', 'leisure time', 'stroll'
+  ];
+  return genericWords.some(w => lower === w || lower === `${w}s`);
 }
 
 /**
@@ -90,16 +129,15 @@ export function cleanPinTitle(rawTitle: string): string {
 
 /**
  * Web-scraping engine that retrieves authentic Pinterest Pins without requiring API keys.
- * Uses an anonymous proxy search pipeline to bypass Cloudflare and CAPTCHA restrictions.
+ * Uses an anonymous proxy search pipeline with strict place relevance filtering.
  */
 export async function scrapePinterestPins(
   rawQuery: string,
   options: PinterestScrapeOptions = {}
 ): Promise<PinterestPin[]> {
   const {
-    limit = 10,
-    timeoutMs = 4000,
-    aestheticKeywords = false, // Strictly use (place name city) for accurate place matching
+    limit = 3,
+    timeoutMs = 2500,
     forceFresh = false,
   } = options;
 
@@ -108,17 +146,18 @@ export async function scrapePinterestPins(
   }
 
   // Clean query: strictly (place name city) for accurate Pinterest place picture matching
-  const sanitized = rawQuery
+  const cleanPlace = cleanPlaceName(rawQuery);
+  if (isGenericPlace(cleanPlace)) {
+    return [];
+  }
+
+  const sanitized = cleanPlace
     .replace(/\([^)]*\)/g, '')
     .replace(/[^\w\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  const queryWithMod = aestheticKeywords
-    ? `${sanitized} travel`
-    : sanitized;
-
-  const searchQuery = `${queryWithMod} site:pinterest.com`;
+  const searchQuery = `${sanitized} site:pinterest.com`;
   const cacheKey = searchQuery.toLowerCase();
 
   // Check in-memory cache
@@ -179,13 +218,28 @@ export async function scrapePinterestPins(
     const json = await apiRes.json();
     const rawResults: any[] = json.results || [];
 
-    // Step 3: Parse and sanitize Pinterest Pins
+    // Step 3: Parse and sanitize Pinterest Pins with STRICT PLACE RELEVANCE
     const parsedPins: PinterestPin[] = [];
     const seenUrls = new Set<string>();
+
+    // Meaningful keywords from place query (tokens >= 3 letters)
+    const placeTokens = sanitized
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length >= 3 && !['the', 'and', 'for', 'with'].includes(t));
+
+    // Banned non-place aesthetic/spam keywords
+    const spamKeywords = [
+      'outfit', 'clothing', 'what to wear', 'fashion', 'wallpaper', 'lockscreen',
+      'aesthetic wallpaper', 'bullet journal', 'quote', 'quotes', 'inspirational',
+      'drawing', 'clipart', 'vector', 'infographic', 'packing list', 'flyer',
+      'costume', 'coloring', 'sketch'
+    ];
 
     for (const item of rawResults) {
       const imgUrl = item.image;
       const pageUrl = item.url || '';
+      const rawTitle = item.title || '';
 
       // Validate Pinterest affiliation
       const isPinImg = imgUrl && imgUrl.includes('pinimg.com');
@@ -193,20 +247,37 @@ export async function scrapePinterestPins(
 
       if (!isPinImg && !isPinterestPage) continue;
 
+      const fullText = `${rawTitle} ${pageUrl}`.toLowerCase();
+
+      // Filter out irrelevant fashion, quotes, drawings, or wallpapers
+      if (spamKeywords.some((w) => fullText.includes(w))) continue;
+
+      // Ensure pin has at least one distinct keyword matching the target place
+      if (placeTokens.length > 0) {
+        const hasKeywordMatch = placeTokens.some((token) => fullText.includes(token));
+        if (!hasKeywordMatch) continue; // Skip pins that don't match the place name
+      }
+
       const highResUrl = getHighResPinterestUrl(imgUrl);
-      if (seenUrls.has(highResUrl)) continue;
-      seenUrls.add(highResUrl);
+
+      // Use high-definition CDN proxy from Bing/DuckDuckGo for 100% reliable image delivery without 403 Forbidden
+      const reliableCdnUrl = item.thumbnail && item.thumbnail.includes('bing.net')
+        ? item.thumbnail.replace('&pid=Api', '&pid=Api&w=800&h=600&c=7')
+        : (item.thumbnail || highResUrl);
+
+      if (seenUrls.has(reliableCdnUrl)) continue;
+      seenUrls.add(reliableCdnUrl);
 
       const pinId = extractPinId(pageUrl) || String(item.image_token || Math.random().toString(36).slice(2));
-      const cleanTitle = cleanPinTitle(item.title || sanitized);
+      const cleanTitle = cleanPinTitle(rawTitle || sanitized);
 
       parsedPins.push({
         id: pinId,
         title: cleanTitle || sanitized,
-        description: item.title || '',
-        imageUrl: highResUrl,
-        thumbnailUrl: item.thumbnail || highResUrl,
-        originalImageUrl: highResUrl.replace(/\/736x\//, '/originals/'),
+        description: rawTitle || '',
+        imageUrl: reliableCdnUrl,
+        thumbnailUrl: item.thumbnail || reliableCdnUrl,
+        originalImageUrl: highResUrl,
         pinUrl: pageUrl.startsWith('http') ? pageUrl : `https://www.pinterest.com/pin/${pinId}/`,
         sourceDomain: 'pinterest.com',
         width: item.width || 736,
@@ -248,7 +319,9 @@ export async function fetchPinterestPlacePhoto(
 ): Promise<PinterestPlacePhoto | null> {
   if (!title || typeof title !== 'string') return null;
 
-  const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
+  const cleanTitle = cleanPlaceName(title);
+  if (isGenericPlace(cleanTitle)) return null;
+
   const cleanCity = (city || '').replace(/\([^)]*\)/g, '').trim();
   // Exact user specification: search on Pinterest to be (place name city)
   const query = `${cleanTitle} ${cleanCity}`.trim();
@@ -256,7 +329,7 @@ export async function fetchPinterestPlacePhoto(
   try {
     const pins = await scrapePinterestPins(query, {
       limit: 3,
-      timeoutMs: 3800,
+      timeoutMs: 2500,
       aestheticKeywords: false,
     });
 
@@ -306,14 +379,16 @@ export async function fetchPinterestPlacePhotos(
 ): Promise<PinterestPlacePhoto[]> {
   if (!title || typeof title !== 'string') return [];
 
-  const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
+  const cleanTitle = cleanPlaceName(title);
+  if (isGenericPlace(cleanTitle)) return [];
+
   const cleanCity = (city || '').replace(/\([^)]*\)/g, '').trim();
   const query = `${cleanTitle} ${cleanCity}`.trim();
 
   try {
     const pins = await scrapePinterestPins(query, {
       limit: 3,
-      timeoutMs: 3800,
+      timeoutMs: 2500,
       aestheticKeywords: false,
     });
 

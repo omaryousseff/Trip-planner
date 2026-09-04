@@ -5,6 +5,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -115,7 +116,7 @@ const SortableScrapbookItem: React.FC<SortableItemProps> = ({
     transform: CSS.Transform.toString(transform),
     transition: transition || 'transform 350ms cubic-bezier(0.25, 1, 0.5, 1)',
     zIndex: isDragging ? 60 : 1,
-    touchAction: 'none',
+    touchAction: isDragging ? 'none' : 'pan-y',
   };
 
   const photoInfo = getLandmarkPhoto(item, destination);
@@ -208,7 +209,8 @@ const SortableScrapbookItem: React.FC<SortableItemProps> = ({
             <div
               {...attributes}
               {...listeners}
-              className="absolute top-3 right-3 text-stone-400 hover:text-stone-700 cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-black/5"
+              style={{ touchAction: 'none' }}
+              className="absolute top-3 right-3 text-stone-400 hover:text-stone-700 cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-black/5 touch-none z-20"
               title="Drag to rearrange & recalculate times"
             >
               <GripVertical className="w-4 h-4" />
@@ -302,7 +304,8 @@ const SortableScrapbookItem: React.FC<SortableItemProps> = ({
             <div
               {...attributes}
               {...listeners}
-              className="absolute top-2 right-2 text-stone-400 hover:text-stone-800 cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-stone-100 z-20"
+              style={{ touchAction: 'none' }}
+              className="absolute top-2 right-2 text-stone-400 hover:text-stone-800 cursor-grab active:cursor-grabbing p-1.5 rounded-lg hover:bg-stone-100 z-20 touch-none"
               title="Drag note to reorder schedule"
             >
               <GripVertical className="w-4 h-4" />
@@ -576,6 +579,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         distance: 8,
       },
     }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -627,7 +636,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
       {/* Day Picker Tactile Tabs Header with Active Day Title */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 touch-pan-x overscroll-x-contain">
           {days.map((day, idx) => {
             const isActive = idx === activeDayIndex;
             const completedCount = day.schedule.filter((i) => i.completed).length;

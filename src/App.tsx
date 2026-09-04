@@ -11,6 +11,8 @@ import { PackingAndPrepCard } from './components/PackingAndPrepCard';
 import { SearchGroundingSources } from './components/SearchGroundingSources';
 import { MobileDeviceFrame } from './components/MobileDeviceFrame';
 import { PhotoLightboxModal } from './components/PhotoLightboxModal';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { TravelDNAOnboarding, TRAVEL_ARCHETYPES } from './components/TravelDNAOnboarding';
 import { CompassAssistant } from './components/CompassAssistant';
 import { BottomNavBar } from './components/BottomNavBar';
@@ -186,6 +188,11 @@ export default function App() {
     setIsDnaModalOpen(false);
     triggerStampCelebration();
   };
+
+  // Reset scroll position to top whenever switching main navigation tabs
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [navigationTab]);
 
   const handleGeneratePlan = async (preferences: TripPreferences) => {
     setIsLoading(true);
@@ -644,7 +651,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF5EC] text-[#2D241E] flex flex-col font-sans selection:bg-[#FFE2D6] selection:text-[#782310] relative pb-24">
+    <div className="min-h-screen bg-[#FAF5EC] text-[#2D241E] flex flex-col font-sans selection:bg-[#FFE2D6] selection:text-[#782310] relative pb-32">
       {/* GLOBAL COZY HEADER BAR */}
       <header className="sticky top-0 z-40 bg-[#FAF4EA]/95 backdrop-blur-md border-b-2 border-[#EFE5D8] px-4 sm:px-6 py-3 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -706,6 +713,7 @@ export default function App() {
 
           {/* Quick Action Tools */}
           <div className="flex items-center gap-2">
+            <PWAInstallButton />
             {/* Today HUD Toggle */}
             {tripPlan && (
               <button
@@ -911,6 +919,8 @@ export default function App() {
           }}
         />
       )}
+      
+      <OfflineIndicator />
     </div>
   );
 }

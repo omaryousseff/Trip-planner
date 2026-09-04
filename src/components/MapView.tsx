@@ -29,6 +29,7 @@ import {
 } from '../utils/geoCoordinates';
 import { getLandmarkPhoto, LandmarkPhotoInfo } from '../utils/landmarkImages';
 import { PhotoLightboxModal } from './PhotoLightboxModal';
+import { InteractiveMap } from './InteractiveMap';
 
 interface MapViewProps {
   items: ScheduleItem[];
@@ -301,235 +302,21 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
       </div>
 
-      {/* Interactive Visual Map & Route Canvas */}
-      <div className="relative bg-gradient-to-br from-stone-100 via-stone-50 to-amber-50/20 rounded-3xl p-4 sm:p-6 border-2 border-stone-900 overflow-hidden shadow-inner min-h-[360px] flex flex-col justify-between">
-        {/* Cartographic grid background */}
-        <div
-          className="absolute inset-0 opacity-[0.4]"
-          style={{
-            backgroundImage: `
-              radial-gradient(#a8a29e 1.2px, transparent 1.2px),
-              linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px)
-            `,
-            backgroundSize: '24px 24px, 48px 48px, 48px 48px',
-          }}
-        />
-
-        {/* Destination Location Label Stamp */}
-        <div className="relative z-10 self-start bg-white/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-stone-300 text-stone-800 shadow-xs flex items-center gap-2">
+            {/* Interactive Visual Map & Route Canvas */}
+      <div className="relative bg-stone-100 rounded-3xl p-1 border-2 border-stone-900 overflow-hidden shadow-inner min-h-[360px] flex flex-col justify-between mb-4">
+        <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-stone-300 text-stone-800 shadow-xs flex items-center gap-2">
           <MapPin className="w-3.5 h-3.5 text-[#FF6B6B]" />
           <span className="text-xs font-black">{destination}</span>
-          {projection.bounds && (
-            <span className="text-[10px] font-mono text-stone-500">
-              ({projection.bounds.minLat.toFixed(2)}°N, {projection.bounds.minLng.toFixed(2)}°E)
-            </span>
-          )}
         </div>
+        <InteractiveMap 
+          items={placesWithCoords} 
+          activeItemIndex={activeItemIndex} 
+          onMarkerClick={setActiveItemIndex} 
+          travelMode={travelMode} 
+        />
+      </div>
 
-        {/* SVG Route Connector Lines and Interactive Markers */}
-        <div className="relative z-10 w-full my-auto overflow-x-auto py-2">
-          <svg
-            viewBox="0 0 800 420"
-            className="w-full h-[280px] sm:h-[340px] drop-shadow-sm select-none"
-          >
-            {/* Draw Sequential Connecting Route Path with SVG id for vehicle tracking */}
-            {projection.points.length > 1 && (
-              <>
-                <path
-                  id="scrapbookRouteTrack"
-                  d={projection.points.reduce((acc, pt, i) => {
-                    return i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
-                  }, '')}
-                  fill="none"
-                  stroke="#FF7A59"
-                  strokeWidth="3.5"
-                  strokeDasharray="8,6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-
-                {/* Animated Moving Vehicle along Dotted Route (Airplane / Train / Walking) */}
-                <g>
-                  <animateMotion
-                    dur="12s"
-                    repeatCount="indefinite"
-                    rotate="auto"
-                  >
-                    <mpath href="#scrapbookRouteTrack" />
-                  </animateMotion>
-                  <g transform="translate(-16, -16)">
-                    <circle
-                      cx="16"
-                      cy="16"
-                      r="14"
-                      fill="#2D241E"
-                      stroke="#FFD93D"
-                      strokeWidth="2"
-                    />
-                    <text
-                      x="16"
-                      y="20"
-                      textAnchor="middle"
-                      fontSize="13"
-                    >
-                      {travelMode === 'transit' ? '🚆' : travelMode === 'driving' ? '🚗' : '✈️'}
-                    </text>
-                  </g>
-                </g>
-              </>
-            )}
-
-            {/* Render Pins on True Relative Geographic Positions with Pop-out Polaroids */}
-            {projection.points.map((pt, i) => {
-              const isSelected = activeItemIndex === i;
-              const place = pt.place;
-              return (
-                <g
-                  key={place.id || i}
-                  transform={`translate(${pt.x}, ${pt.y})`}
-                  className="cursor-pointer transition-transform duration-200"
-                  onClick={() => {
-                    setActiveItemIndex(i);
-                  }}
-                >
-                  {/* Outer pulse circle for selected pin */}
-                  {isSelected && (
-                    <circle
-                      r="26"
-                      fill="none"
-                      stroke="#FF7A59"
-                      strokeWidth="3"
-                      opacity="0.7"
-                      className="animate-ping"
-                    />
-                  )}
-
-                  {/* Marker shadow */}
-                  <ellipse cx="0" cy="18" rx="14" ry="5" fill="rgba(0,0,0,0.18)" />
-
-                  {/* Pin Body */}
-                  <circle
-                    r={isSelected ? '18' : '15'}
-                    fill={isSelected ? '#2D241E' : '#FF7A59'}
-                    stroke="#FFFFFF"
-                    strokeWidth="3"
-                    className="transition-colors"
-                  />
-
-                  {/* Sequence number */}
-                  <text
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill="#FFFFFF"
-                    fontSize={isSelected ? '13' : '11'}
-                    fontWeight="900"
-                    fontFamily="sans-serif"
-                  >
-                    {place.displayIndex}
-                  </text>
-
-                  {/* POP-OUT POLAROID PIN (Enhanced when selected) */}
-                  {isSelected ? (
-                    <g transform="translate(-65, -135)">
-                      {/* Polaroid White Card Body */}
-                      <rect
-                        x="0"
-                        y="0"
-                        width="130"
-                        height="115"
-                        rx="6"
-                        fill="#FFFFFF"
-                        stroke="#2D241E"
-                        strokeWidth="2"
-                        filter="drop-shadow(0px 8px 16px rgba(0,0,0,0.2))"
-                      />
-
-                      {/* Mini Washi Tape on Polaroid */}
-                      <rect
-                        x="35"
-                        y="-6"
-                        width="60"
-                        height="12"
-                        rx="2"
-                        fill="rgba(255, 122, 89, 0.85)"
-                      />
-
-                      {/* Photo Image inside Polaroid */}
-                      <clipPath id={`polaroidClip-${i}`}>
-                        <rect x="8" y="10" width="114" height="68" rx="3" />
-                      </clipPath>
-                      <image
-                        href={place.photoInfo.url}
-                        x="8"
-                        y="10"
-                        width="114"
-                        height="68"
-                        preserveAspectRatio="xMidYMid slice"
-                        clipPath={`url(#polaroidClip-${i})`}
-                      />
-
-                      {/* Handwritten Caption Title */}
-                      <text
-                        x="65"
-                        y="94"
-                        textAnchor="middle"
-                        fill="#1F2937"
-                        fontSize="12"
-                        fontWeight="bold"
-                        fontFamily="'Caveat', cursive, sans-serif"
-                      >
-                        {place.title.length > 16 ? `${place.title.slice(0, 15)}...` : place.title}
-                      </text>
-
-                      {/* Stated Source Badge */}
-                      <text
-                        x="65"
-                        y="107"
-                        textAnchor="middle"
-                        fill="#6B7280"
-                        fontSize="8"
-                        fontWeight="bold"
-                        fontFamily="sans-serif"
-                      >
-                        {place.photoInfo.source.length > 20 ? place.photoInfo.source.slice(0, 18) + '...' : place.photoInfo.source}
-                      </text>
-
-                      {/* Polaroid bottom pointer triangle */}
-                      <polygon points="60,115 70,115 65,124" fill="#2D241E" />
-                    </g>
-                  ) : (
-                    /* Standard Mini Tag when not selected */
-                    <g transform="translate(0, -28)">
-                      <rect
-                        x="-55"
-                        y="-11"
-                        width="110"
-                        height="20"
-                        rx="5"
-                        fill="rgba(255, 255, 255, 0.95)"
-                        stroke="#E5E7EB"
-                        strokeWidth="1"
-                      />
-                      <text
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fill="#1F2937"
-                        fontSize="9"
-                        fontWeight="bold"
-                        fontFamily="'Caveat', cursive, sans-serif"
-                      >
-                        {place.title.length > 15 ? `${place.title.slice(0, 14)}...` : place.title}
-                      </text>
-                    </g>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* Selected Landmark Snapshot Popover inside Canvas */}
+      {/* Selected Landmark Snapshot Popover inside Canvas */}
         {activePlace && (
           <div className="relative z-20 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 border-2 border-stone-900 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -605,7 +392,6 @@ export const MapView: React.FC<MapViewProps> = ({
             </div>
           </div>
         )}
-      </div>
 
       {/* Sequential Landmark List & Route Step Breakdown */}
       <div className="space-y-4">

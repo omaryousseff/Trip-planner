@@ -67,7 +67,7 @@ export const MobileDeviceFrame: React.FC<MobileDeviceFrameProps> = ({
           </div>
 
           {/* Scrollable Body Content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20 scrollbar-none bg-[#FFF8F0]">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20 scrollbar-none bg-[#FFF8F0] overscroll-y-contain touch-pan-y">
             {children}
           </div>
 
